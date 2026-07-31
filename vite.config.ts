@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  // Relative base so Tauri/Capacitor file/capacitor schemes load assets correctly
+  base: './',
   plugins: [
     react(),
     VitePWA({

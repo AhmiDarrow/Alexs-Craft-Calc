@@ -47,6 +47,12 @@ android/.idea/
 *.ap_
 *.dex
 
+# Packaged binaries (publish via GitHub Releases)
+releases/*.exe
+releases/*.msi
+releases/*.apk
+releases/*.aab
+
 # Misc
 .cache/
 *.tsbuildinfo

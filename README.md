@@ -82,26 +82,54 @@ npm start
 npm test
 ```
 
-## Mobile
+## Mobile (PWA)
 1. On the same Wi‑Fi, open `http://<your-pc-ip>:4173` from the phone  
    or deploy the `dist/` folder to any static host / tunnel.
 2. Safari/Chrome → **Add to Home Screen** for a full-screen app icon.
 3. Tap **?** or **F1 / Wiki** for the knowledge base.
 
+## Native builds
+
+### Windows desktop (Tauri)
+Requires Rust + MSVC Build Tools + WebView2.
+
+```bash
+npm install
+npm run tauri:build
+```
+
+Outputs:
+- `src-tauri/target/release/alexs-craft-calc.exe` — portable desktop app
+- `src-tauri/target/release/bundle/msi/*_x64_en-US.msi` — installer
+
+Or from a release folder after packaging: `releases/Alexs-Craft-Calc.exe` / `.msi`.
+
+### Android APK (Capacitor)
+Requires **JDK 21**, Android SDK (`platform-tools`, `platforms;android-35+`, `build-tools`).
+
+```bash
+# set JAVA_HOME to JDK 21 and ANDROID_HOME to your SDK root
+npm run build
+npx cap sync android
+cd android
+./gradlew assembleDebug          # Windows: gradlew.bat assembleDebug
+```
+
+APK path: `android/app/build/outputs/apk/debug/app-debug.apk`  
+(sideload / debug-signed — fine for personal everyday use)
+
+```bash
+npm run android:apk              # build web + sync + debug APK (Windows)
+```
+
 ## Project layout
 ```
-src/
-  data/oils.ts          SAP oil database + encyclopedia
-  data/waxes.ts         Wax + vessel presets + encyclopedia
-  data/wiki.ts          F1 craft wiki articles + search
-  lib/soapCalc.ts       Lye / water / FO math
-  lib/candleCalc.ts     Wax / FO / wick math
-  lib/storage.ts        Saved recipes + clipboard helpers
-  lib/calc.test.ts      Formula unit tests
-  components/           Soap, Candle, Wiki, ModeToggle, Toast
-  wiki-polish.css       Wiki + toolbar polish styles
+src/                    React UI + calc engines + F1 wiki
+src-tauri/              Tauri 2 Windows desktop shell
+android/                Capacitor Android project
 public/                 Icons, brand mark, PWA assets
-START.bat               One-click everyday launcher
+releases/               Local packaged EXE / MSI / APK (gitignored binaries)
+START.bat               One-click web launcher
 ```
 
 ## Safety
