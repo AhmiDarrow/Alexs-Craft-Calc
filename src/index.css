@@ -1,0 +1,86 @@
+:root {
+  color-scheme: dark;
+  --void: #0a0614;
+  --deep: #120a22;
+  --panel: rgba(28, 14, 52, 0.72);
+  --panel-solid: #1a0f30;
+  --border: rgba(186, 120, 255, 0.28);
+  --border-strong: rgba(210, 150, 255, 0.55);
+  --text: #f3eaff;
+  --muted: #b9a4d8;
+  --faint: #7d6a9e;
+  --alien: #b44dff;
+  --alien-bright: #d28bff;
+  --alien-hot: #e9b8ff;
+  --cyan: #6ef3ff;
+  --success: #7dffa8;
+  --warn: #ffd27a;
+  --danger: #ff7a9a;
+  --shadow: 0 20px 60px rgba(80, 0, 140, 0.35);
+  --radius: 18px;
+  --radius-sm: 12px;
+  --font: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --mono: 'Cascadia Code', 'Consolas', ui-monospace, monospace;
+  font-family: var(--font);
+  line-height: 1.45;
+  font-weight: 400;
+  color: var(--text);
+  background: var(--void);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(140, 40, 255, 0.28), transparent 55%),
+    radial-gradient(900px 500px at 100% 0%, rgba(80, 0, 180, 0.22), transparent 50%),
+    linear-gradient(180deg, #10081c 0%, var(--void) 40%, #07040f 100%);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: var(--alien-bright);
+}
+
+::selection {
+  background: rgba(180, 77, 255, 0.45);
+  color: white;
+}
+
+/* number inputs without spin clutter on some browsers */
+input[type='number'] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
