@@ -1,4 +1,13 @@
-import { calculateSoap, defaultSoapInput } from './soapCalc'
+import {
+  calculateSoap,
+  convertWeight,
+  defaultSoapInput,
+  emptyLockedResult,
+  isPercentTotalLocked,
+  oilsFromPercents,
+  percentsFromOils,
+  sumOilPercents,
+} from './soapCalc'
 import { calculateCandle, defaultCandleInput, suggestWick } from './candleCalc'
 
 function assert(cond: unknown, msg: string): asserts cond {
@@ -105,6 +114,50 @@ function nearly(a: number, b: number, eps = 0.05) {
   assert(hint.includes('3'), 'diameter in hint')
 }
 
+// Weight unit conversion g ↔ oz ↔ lb
+{
+  nearly(convertWeight(453.59237, 'g', 'lb'), 1, 0.0001)
+  nearly(convertWeight(1, 'lb', 'oz'), 16, 0.0001)
+  nearly(convertWeight(16, 'oz', 'g'), 453.59237, 0.01)
+  nearly(convertWeight(1000, 'g', 'g'), 1000)
+}
+
+// Percent ↔ weight helpers + 100% lock gate
+{
+  const oils = oilsFromPercents(1000, [
+    { oilId: 'olive', pct: 40 },
+    { oilId: 'coconut', pct: 25 },
+    { oilId: 'palm', pct: 25 },
+    { oilId: 'castor', pct: 10 },
+  ])
+  nearly(oils[0].amount, 400)
+  nearly(oils[1].amount, 250)
+  nearly(oils[3].amount, 100)
+  const back = percentsFromOils(oils)
+  nearly(sumOilPercents(back.map((b) => b.pct)), 100, 0.01)
+  assert(isPercentTotalLocked(100), '100 locks open')
+  assert(isPercentTotalLocked(99.97), 'within eps locks open')
+  assert(!isPercentTotalLocked(99.9), 'short stays locked')
+  assert(!isPercentTotalLocked(100.1), 'over stays locked')
+  const locked = emptyLockedResult(['Oil percentages must total 100%.'])
+  assert(locked.locked === true, 'locked flag')
+  assert(locked.lyeWithSuperfat === 0, 'no lye while locked')
+}
+
+// Percent-derived recipe matches weight recipe lye
+{
+  const byWeight = calculateSoap(defaultSoapInput())
+  const byPctOils = oilsFromPercents(1000, [
+    { oilId: 'olive', pct: 40 },
+    { oilId: 'coconut', pct: 25 },
+    { oilId: 'palm', pct: 25 },
+    { oilId: 'castor', pct: 10 },
+  ])
+  const byPct = calculateSoap({ ...defaultSoapInput(), oils: byPctOils })
+  nearly(byPct.pureLye, byWeight.pureLye, 0.05)
+  nearly(byPct.totalOils, 1000)
+}
+
 // Recipe export pack round-trip (no DOM / localStorage required)
 async function testSharePacks() {
   const {
@@ -119,7 +172,7 @@ async function testSharePacks() {
     id: 'soap-test',
     name: 'Test Castile',
     savedAt: new Date().toISOString(),
-    oils: [{ oilId: 'olive', amount: 1000 }],
+    oils: [{ oilId: 'olive', amount: 1000, pct: 100 }],
     lyeType: 'naoh',
     superfatPct: 5,
     waterMethod: 'percent_oils',
@@ -127,7 +180,10 @@ async function testSharePacks() {
     lyeConcentrationPct: 33,
     waterDiscountPct: 0,
     fragrancePct: 3,
-    unit: 'g',
+    unit: 'lb',
+    oilEntryMode: 'percent',
+    totalOilsWeight: 2.2,
+    notes: 'Custom lavender batch notes',
   })
   assert(soapPack.format === SHARE_FORMAT, 'soap pack format')
   assert(soapPack.app.includes('Alex'), 'branded pack')
@@ -138,6 +194,10 @@ async function testSharePacks() {
     assert(soapParsed.soapCount === 1, 'one soap')
     assert(soapParsed.soap?.[0]?.oils[0]?.oilId === 'olive', 'olive oil')
     assert(soapParsed.soap?.[0]?.superfatPct === 5, 'sf 5')
+    assert(soapParsed.soap?.[0]?.unit === 'lb', 'lb unit round-trip')
+    assert(soapParsed.soap?.[0]?.oilEntryMode === 'percent', 'entry mode')
+    assert(soapParsed.soap?.[0]?.totalOilsWeight === 2.2, 'total oils')
+    assert(soapParsed.soap?.[0]?.notes?.includes('lavender'), 'notes field')
   }
 
   const candlePack = buildCandleSharePack({

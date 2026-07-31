@@ -1,6 +1,6 @@
 [package]
 name = "alexs-craft-calc"
-version = "1.0.1"
+version = "1.0.2"
 description = "Alex's Craft Calc — Alien Purple soap & candle calculator"
 authors = ["AhmiDarrow"]
 license = "MIT"

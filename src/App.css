@@ -348,6 +348,41 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
+  align-items: center;
+}
+
+.preset-row .custom-recipe-btn {
+  order: -1;
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.45), rgba(124, 58, 237, 0.35));
+  border-color: rgba(216, 180, 254, 0.55);
+  color: #f5e9ff;
+  box-shadow: 0 0 0 1px rgba(192, 132, 252, 0.4), 0 0 20px rgba(168, 85, 247, 0.35);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.preset-row .custom-recipe-btn:hover {
+  background: linear-gradient(135deg, rgba(192, 132, 252, 0.55), rgba(139, 92, 246, 0.42));
+  border-color: rgba(233, 213, 255, 0.75);
+}
+
+.oil-empty-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.95rem 1rem;
+  margin-bottom: 0.55rem;
+  border: 1px dashed rgba(192, 132, 252, 0.45);
+  border-radius: 12px;
+  background: rgba(88, 28, 135, 0.18);
+}
+
+.oil-empty-state p {
+  margin: 0;
+  color: var(--muted, #c4b5fd);
+  font-size: 0.9rem;
 }
 
 .chip {

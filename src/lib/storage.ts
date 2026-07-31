@@ -11,7 +11,7 @@ export interface SavedSoapRecipe {
   id: string
   name: string
   savedAt: string
-  oils: { oilId: string; amount: number }[]
+  oils: { oilId: string; amount: number; pct?: number }[]
   lyeType: 'naoh' | 'koh'
   superfatPct: number
   waterMethod: 'percent_oils' | 'lye_concentration' | 'discount'
@@ -19,7 +19,13 @@ export interface SavedSoapRecipe {
   lyeConcentrationPct: number
   waterDiscountPct: number
   fragrancePct: number
-  unit: 'g' | 'oz'
+  unit: 'g' | 'oz' | 'lb'
+  /** How oils were entered when saved */
+  oilEntryMode?: 'weight' | 'percent'
+  /** Dedicated total oils weight (used heavily in % mode) */
+  totalOilsWeight?: number
+  /** Free-form maker notes / custom recipe field */
+  notes?: string
 }
 
 export interface SavedCandleRecipe {
@@ -190,7 +196,7 @@ function isSoapRecipe(v: unknown): v is SavedSoapRecipe {
     v.waterMethod !== 'discount'
   )
     return false
-  if (v.unit !== 'g' && v.unit !== 'oz') return false
+  if (v.unit !== 'g' && v.unit !== 'oz' && v.unit !== 'lb') return false
   return v.oils.every(
     (o) =>
       isRecord(o) &&
@@ -211,11 +217,24 @@ function isCandleRecipe(v: unknown): v is SavedCandleRecipe {
 }
 
 function normalizeSoap(r: SavedSoapRecipe, forceNewId = true): SavedSoapRecipe {
+  const unit = r.unit === 'oz' || r.unit === 'lb' ? r.unit : 'g'
+  const oilEntryMode =
+    r.oilEntryMode === 'percent' || r.oilEntryMode === 'weight' ? r.oilEntryMode : 'weight'
+  const notes =
+    typeof r.notes === 'string' ? r.notes.slice(0, 4000) : undefined
+  const totalOilsWeight =
+    typeof r.totalOilsWeight === 'number' && Number.isFinite(r.totalOilsWeight)
+      ? r.totalOilsWeight
+      : undefined
   return {
     id: forceNewId ? `soap-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}` : r.id,
     name: String(r.name).slice(0, 120) || 'Imported soap',
     savedAt: typeof r.savedAt === 'string' ? r.savedAt : new Date().toISOString(),
-    oils: r.oils.map((o) => ({ oilId: o.oilId, amount: o.amount })),
+    oils: r.oils.map((o) => ({
+      oilId: o.oilId,
+      amount: o.amount,
+      ...(typeof o.pct === 'number' && Number.isFinite(o.pct) ? { pct: o.pct } : {}),
+    })),
     lyeType: r.lyeType,
     superfatPct: r.superfatPct,
     waterMethod: r.waterMethod,
@@ -223,7 +242,10 @@ function normalizeSoap(r: SavedSoapRecipe, forceNewId = true): SavedSoapRecipe {
     lyeConcentrationPct: Number(r.lyeConcentrationPct) || 33,
     waterDiscountPct: Number(r.waterDiscountPct) || 0,
     fragrancePct: Number(r.fragrancePct) || 0,
-    unit: r.unit,
+    unit,
+    oilEntryMode,
+    ...(totalOilsWeight != null ? { totalOilsWeight } : {}),
+    ...(notes ? { notes } : {}),
   }
 }
 

@@ -51,7 +51,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
       },
       {
         heading: 'Keyboard',
-        body: 'F1 — open / close wiki\nEsc — on phone: back to article list, then close; on desktop: close wiki\n? button — same as F1 on touch devices\n\nPhone wiki is one full page at a time: browse/search the list, tap an article to read it full-screen, then ← All articles (or Esc) to go back. No split panes.',
+        body: 'F1 — open / close wiki\nEsc — on phone: back to article list, then close; on desktop: close wiki\nPhone system Back / gesture — same stack as Esc: article → article list → calculator (does not leave the app while the wiki is open)\n? button — same as F1 on touch devices\n\nPhone wiki is one full page at a time: browse/search the list, tap an article to read it full-screen, then ← All articles, Esc, or system Back to go back. No split panes.',
       },
     ],
   },
@@ -97,22 +97,26 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     summary: 'Every control on the soap side explained.',
     sections: [
       {
+        heading: 'Weight of oils',
+        body: 'Pick g, oz, or lb with the unit tabs. Enter a dedicated Total oils weight for the whole batch — this is the combined oil weight, not each oil alone. Switch entry mode:\n• By weight — type each oil amount; live % updates automatically. Use Scale oils to total to hit your batch size.\n• By % — type each oil as a percentage of the total. Weights fill in from Total oils. Lye/water stay locked until percentages total exactly 100% (warning shown while short or over).',
+      },
+      {
         heading: 'Oils table',
-        body: 'Add rows for each oil/butter. Amounts are in g or oz (header unit). Live % shows contribution to the oil blend. Tap the info chip on an oil name (or open wiki → that oil) for encyclopedia notes. SAP used in results is NaOH or KOH depending on lye type.',
+        body: 'Add rows for each oil/butter. Weight and % columns stay in sync with the active entry mode. Tap the info chip on an oil (or open wiki for that oil) for encyclopedia notes. SAP used in results is NaOH or KOH depending on lye type. Custom recipe notes sit under the recipe toolbar for batch reminders, FO blend, mold, cure plan, etc.',
       },
       {
         heading: 'Lye & superfat',
-        body: 'NaOH = bar soap. KOH = liquid soap (app uses KOH = NaOH SAP × 1.4027). Superfat % leaves that fraction of oils unsaponified — typical bars 4–8%. Pure lye (0% SF) is shown in meta for checking.',
+        body: 'NaOH = bar soap. KOH = liquid soap (app uses KOH = NaOH SAP x 1.4027). Superfat % leaves that fraction of oils unsaponified - typical bars 4-8%. Pure lye (0% SF) is shown in meta for checking.',
       },
       {
         heading: 'Water methods',
-        body: '% of oils — simple classic (e.g. 33% water relative to oil weight).\nLye concentration — water from lye÷(lye+water); 33% concentration is a common full-water starting point; higher concentration = less water, faster cure, thicker trace.\nWater discount — legacy style off ~38% full water.',
+        body: '% of oils - simple classic (e.g. 33% water relative to oil weight).\nLye concentration - water from lye / (lye+water); 33% concentration is a common full-water starting point; higher concentration = less water, faster cure, thicker trace.\nWater discount - legacy style off ~38% full water.',
       },
       {
         heading: 'Recipes, export & import',
-        body: 'Save stores the full recipe in this browser. Load restores it. Copy batch puts a text summary on the clipboard. Print opens a clean batch sheet. Scale multiplies all oil weights to a new total.\n\nExport downloads a portable .alex-soap.json file friends can Import. Export all dumps every saved soap + candle recipe into one library file — great for backup or moving phones/PCs.',
+        body: 'Save stores the full recipe (oils, mode, total oils, notes, units) in this browser. Load restores it. Copy batch puts a text summary on the clipboard. Print opens a clean batch sheet.\n\nExport downloads a portable .alex-soap.json file friends can Import. Export all dumps every saved soap + candle recipe into one library file - great for backup or moving phones/PCs.',
       },
-    ],
+    ]
   },
   {
     id: 'app-candle-ui',
@@ -155,7 +159,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     summary: 'g / oz / lb and how to weigh.',
     sections: [
       {
-        body: 'Soap supports grams and ounces. Candle adds pounds. Math is linear in whatever unit you pick — do not mix units inside one batch.\n\nUse a scale that resolves 0.1 g (or 0.01 oz) for lye. Volume cups are not accurate enough for lye or FO. When a supplier gives SAP as KOH numbers, convert or use their NaOH table — this app’s database is NaOH-based reference values.',
+        body: 'Soap and candle both support grams, ounces, and pounds. Switching the unit tabs converts oil weights and the total-oils field so the recipe stays the same mass. Math is linear in whatever unit you pick — do not mix units inside one batch by hand.\n\nUse a scale that resolves 0.1 g (or 0.01 oz) for lye. Volume cups are not accurate enough for lye or FO. When a supplier gives SAP as KOH numbers, convert or use their NaOH table - this app database is NaOH-based reference values.',
       },
     ],
   },

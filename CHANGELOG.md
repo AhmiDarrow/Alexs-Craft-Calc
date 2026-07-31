@@ -2,6 +2,25 @@
 
 All notable changes to **Alex's Craft Calc** are documented here.
 
+## [Unreleased]
+
+## [1.0.2] — 2026-07-31
+
+### Added
+- Soap **unit tabs** g · oz · lb with live weight conversion
+- Dedicated **Total oils weight** field (batch size)
+- Oil entry modes: **By weight** (live %) and **By %** (weights from total)
+- **% mode lock** — lye/water results stay locked until oil % totals 100% (with warning)
+- **Custom** preset chip — blank recipe with **no oils/butters preloaded**
+- **Custom recipe notes** field (saved and exported with the recipe)
+
+### Fixed
+- **Mobile wiki Back**: phone system Back / browser Back leaves the wiki (article → list → calculator) instead of exiting the app
+
+### Docs
+- Wiki soap UI + units articles updated for the weight-of-oils workflow
+- README soap feature list refreshed
+
 ## [1.0.1] — 2026-07-31
 
 ### Improved

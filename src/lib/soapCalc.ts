@@ -2,6 +2,8 @@ import { KOH_FACTOR, getOil, type Oil } from '../data/oils'
 
 export type LyeType = 'naoh' | 'koh'
 export type WaterMethod = 'percent_oils' | 'lye_concentration' | 'discount'
+export type SoapUnit = 'g' | 'oz' | 'lb'
+export type OilEntryMode = 'weight' | 'percent'
 
 export interface OilLine {
   oilId: string
@@ -23,7 +25,7 @@ export interface SoapInput {
   waterDiscountPct: number
   /** Fragrance oil % of total oils */
   fragrancePct: number
-  unit: 'g' | 'oz'
+  unit: SoapUnit
 }
 
 export interface SoapResult {
@@ -44,11 +46,89 @@ export interface SoapResult {
   weightedIodine: number | null
   weightedIns: number | null
   warnings: string[]
+  /** True when results are intentionally blanked (e.g. % mode not at 100). */
+  locked?: boolean
 }
+
+const G_PER_OZ = 28.349523125
+const G_PER_LB = 453.59237
+
+/** How close oil % total must be to 100 before lye math unlocks. */
+export const PCT_TOTAL_EPS = 0.05
 
 function round(n: number, places = 2): number {
   const f = 10 ** places
   return Math.round(n * f) / f
+}
+
+function toGrams(value: number, unit: SoapUnit): number {
+  if (unit === 'g') return value
+  if (unit === 'oz') return value * G_PER_OZ
+  return value * G_PER_LB
+}
+
+function fromGrams(grams: number, unit: SoapUnit): number {
+  if (unit === 'g') return grams
+  if (unit === 'oz') return grams / G_PER_OZ
+  return grams / G_PER_LB
+}
+
+/** Convert between g, oz, and lb (weight). */
+export function convertWeight(value: number, from: SoapUnit, to: SoapUnit): number {
+  if (from === to) return value
+  if (!Number.isFinite(value)) return value
+  return fromGrams(toGrams(value, from), to)
+}
+
+export function sumOilPercents(pcts: number[]): number {
+  return pcts.reduce((s, p) => s + (Number.isFinite(p) ? p : 0), 0)
+}
+
+export function isPercentTotalLocked(sumPct: number, eps = PCT_TOTAL_EPS): boolean {
+  return Math.abs(sumPct - 100) <= eps
+}
+
+/** Derive oil weights from a batch total and per-oil percentages. */
+export function oilsFromPercents(
+  totalOils: number,
+  lines: { oilId: string; pct: number }[],
+): OilLine[] {
+  if (!(totalOils > 0)) {
+    return lines.map((l) => ({ oilId: l.oilId, amount: 0 }))
+  }
+  return lines.map((l) => ({
+    oilId: l.oilId,
+    amount: round(totalOils * ((Number.isFinite(l.pct) ? l.pct : 0) / 100), 4),
+  }))
+}
+
+/** Derive percentages from oil weights (0 if total is 0). */
+export function percentsFromOils(lines: OilLine[]): { oilId: string; pct: number }[] {
+  const total = lines.reduce((s, l) => s + (l.amount > 0 ? l.amount : 0), 0)
+  if (!(total > 0)) {
+    return lines.map((l) => ({ oilId: l.oilId, pct: 0 }))
+  }
+  return lines.map((l) => ({
+    oilId: l.oilId,
+    pct: round(((l.amount > 0 ? l.amount : 0) / total) * 100, 4),
+  }))
+}
+
+export function emptyLockedResult(warnings: string[]): SoapResult {
+  return {
+    totalOils: 0,
+    pureLye: 0,
+    lyeWithSuperfat: 0,
+    water: 0,
+    fragrance: 0,
+    totalBatch: 0,
+    lyeSolution: 0,
+    oilBreakdown: [],
+    weightedIodine: null,
+    weightedIns: null,
+    warnings,
+    locked: true,
+  }
 }
 
 export function calculateSoap(input: SoapInput): SoapResult {
@@ -136,7 +216,9 @@ export function calculateSoap(input: SoapInput): SoapResult {
     .filter((b) => ['coconut', 'palm-kernel', 'babassu', 'coconut-fractionated'].includes(b.oilId))
     .reduce((s, b) => s + b.pct, 0)
   if (coconutish > 40) {
-    warnings.push('High lauric oils (>40%) can be drying — consider higher superfat or more conditioning oils.')
+    warnings.push(
+      'High lauric oils (>40%) can be drying — consider higher superfat or more conditioning oils.',
+    )
   }
   if (sf < 0.03) {
     warnings.push('Superfat under 3% leaves little buffer for measurement error.')
@@ -165,13 +247,6 @@ export function calculateSoap(input: SoapInput): SoapResult {
     weightedIns,
     warnings,
   }
-}
-
-/** Convert between g and oz (weight). */
-export function convertWeight(value: number, from: 'g' | 'oz', to: 'g' | 'oz'): number {
-  if (from === to) return value
-  if (from === 'g' && to === 'oz') return value / 28.349523125
-  return value * 28.349523125
 }
 
 export function defaultSoapInput(): SoapInput {

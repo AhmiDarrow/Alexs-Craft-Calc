@@ -88,6 +88,13 @@ function formatInline(line: string): ReactNode {
   })
 }
 
+/** History state marker so Android/PWA system Back leaves the wiki first. */
+type WikiHist = { alexWiki: true; view: 'list' | 'article'; id?: string }
+
+function isWikiHist(s: unknown): s is WikiHist {
+  return !!s && typeof s === 'object' && (s as WikiHist).alexWiki === true
+}
+
 export function Wiki({ open, onClose, initialId }: WikiProps) {
   const articles = useMemo(() => buildFullWiki(OILS, WAXES), [])
   const isMobile = useIsMobile()
@@ -100,6 +107,20 @@ export function Wiki({ open, onClose, initialId }: WikiProps) {
   const articleRef = useRef<HTMLElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   const openSeq = useRef(0)
+  /** How many history entries this wiki session pushed (for clean dismiss). */
+  const histDepthRef = useRef(0)
+  /** Ignore synthetic popstate from our own history.go cleanup. */
+  const ignorePopRef = useRef(false)
+  const mobileViewRef = useRef(mobileView)
+  const isMobileRef = useRef(isMobile)
+  mobileViewRef.current = mobileView
+  isMobileRef.current = isMobile
+
+  const pushWikiHist = (view: 'list' | 'article', id?: string) => {
+    const state: WikiHist = { alexWiki: true, view, id }
+    window.history.pushState(state, '')
+    histDepthRef.current += 1
+  }
 
   useEffect(() => {
     if (!open) return
@@ -113,12 +134,47 @@ export function Wiki({ open, onClose, initialId }: WikiProps) {
     const jumpIn = Boolean(initialId && articles.some((a) => a.id === initialId))
     setMobileView(jumpIn ? 'article' : 'list')
 
+    // History stack so phone system Back: article → list → calculator (not app exit).
+    histDepthRef.current = 0
+    pushWikiHist('list')
+    if (jumpIn) pushWikiHist('article', initialId ?? id)
+
+    const onPop = () => {
+      if (ignorePopRef.current) {
+        ignorePopRef.current = false
+        return
+      }
+      histDepthRef.current = Math.max(0, histDepthRef.current - 1)
+
+      // Still inside wiki on an article → step back to the list.
+      if (isMobileRef.current && mobileViewRef.current === 'article') {
+        setMobileView('list')
+        window.setTimeout(() => searchRef.current?.focus(), 40)
+        return
+      }
+      // List (or desktop) → close wiki, return to calculator.
+      histDepthRef.current = 0
+      onClose()
+    }
+    window.addEventListener('popstate', onPop)
+
     const t = window.setTimeout(() => {
       if (seq !== openSeq.current) return
       if (!jumpIn) searchRef.current?.focus()
     }, 60)
-    return () => window.clearTimeout(t)
-  }, [open, initialId, articles])
+
+    return () => {
+      window.clearTimeout(t)
+      window.removeEventListener('popstate', onPop)
+      // Closed via X / F1 / backdrop — drop wiki history entries without re-firing close.
+      const depth = histDepthRef.current
+      if (depth > 0) {
+        ignorePopRef.current = true
+        histDepthRef.current = 0
+        window.history.go(-depth)
+      }
+    }
+  }, [open, initialId, articles, onClose])
 
   useEffect(() => {
     if (!open) return
@@ -135,9 +191,13 @@ export function Wiki({ open, onClose, initialId }: WikiProps) {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         e.preventDefault()
-        // Mobile article → back to list first; list / desktop → close
+        // Mobile article → back to list first (via history so stack stays honest)
         if (isMobile && mobileView === 'article') {
-          setMobileView('list')
+          if (isWikiHist(window.history.state) && window.history.state.view === 'article') {
+            window.history.back()
+          } else {
+            setMobileView('list')
+          }
           return
         }
         onClose()
@@ -168,16 +228,37 @@ export function Wiki({ open, onClose, initialId }: WikiProps) {
 
   const openArticle = (id: string) => {
     setActiveId(id)
-    if (isMobile) setMobileView('article')
+    if (!isMobile) return
+    // Already reading → replace so Back still returns to list (not prior article).
+    if (
+      mobileView === 'article' &&
+      isWikiHist(window.history.state) &&
+      window.history.state.view === 'article'
+    ) {
+      window.history.replaceState({ alexWiki: true, view: 'article', id } satisfies WikiHist, '')
+      setMobileView('article')
+      return
+    }
+    setMobileView('article')
+    pushWikiHist('article', id)
   }
 
   const backToList = () => {
+    // Prefer history.back so Android/PWA stack matches the UI button.
+    if (isWikiHist(window.history.state) && window.history.state.view === 'article') {
+      window.history.back()
+      return
+    }
     setMobileView('list')
     window.setTimeout(() => searchRef.current?.focus(), 40)
   }
 
   const onTagClick = (t: string) => {
     setQuery(t)
+    if (isMobile && mobileView === 'article') {
+      backToList()
+      return
+    }
     if (isMobile) setMobileView('list')
   }
 

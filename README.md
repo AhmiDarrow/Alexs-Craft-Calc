@@ -10,16 +10,18 @@ Press **F1** anytime for the full **Craft Wiki** — app help plus a real encycl
 
 ### Soap calculator
 - 30 oils/butters with industry-standard NaOH SAP values + craft encyclopedia blurbs
+- **Weight of oils:** unit tabs **g · oz · lb** + dedicated **Total oils weight**
+- Entry modes: **By weight** (live %) or **By %** (weights from total; lye locked until % = 100)
 - NaOH (bar) or KOH (liquid) — KOH = NaOH × 1.4027
 - Superfat % with live lye adjustment
 - Water methods: % of oils · lye concentration · water discount
 - Fragrance % of oils
 - Weighted iodine & INS + hardness body hint
-- Presets: Castile-ish · Everyday Bar · Creamy Shea · Palm-free · Luxury Butter
-- Scale batch to a target oil weight
-- Unit switch g ⇄ oz converts amounts
+- Presets: **Custom** (blank — no oils) · Castile-ish · Everyday Bar · Creamy Shea · Palm-free · Luxury Butter
+- Scale oils to the total-oils field
+- **Custom recipe notes** field (saved with the recipe)
 - Save / load / delete recipes (local)
-- **Export · Import · Export all** (portable JSON)
+- **Export · Import · Export all** (portable JSON — includes mode, total, notes)
 - Copy recipe · Print batch sheet
 - Per-oil wiki deep-links (ⓘ)
 
@@ -40,7 +42,7 @@ Press **F1** anytime for the full **Craft Wiki** — app help plus a real encycl
 - Full oil encyclopedia (all 30 oils) and wax guide (all profiles)
 - Categories, search, tags, keyboard: **F1** toggle · **Esc** close · **Ctrl+/**
 - Deep-link from calculators into the matching oil/wax page
-- **Phone:** one full page at a time (list ↔ article) — no split panes; **← All articles** or Esc goes back
+- **Phone:** one full page at a time (list ↔ article) — no split panes; **← All articles**, Esc, or system **Back** returns article → list → calculator (does not exit the app first)
 
 ### Recipe export / import
 - **Export** — downloads `.alex-soap.json` / `.alex-candle.json` for one recipe

@@ -249,6 +249,178 @@
   width: 100%;
 }
 
+/* Weight unit tabs (g / oz / lb) */
+.unit-tabs,
+.entry-mode-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  border-radius: 999px;
+  background: rgba(12, 4, 24, 0.55);
+  border: 1px solid var(--border);
+}
+
+.unit-tab,
+.mode-tab {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.unit-tab:hover,
+.mode-tab:hover {
+  color: var(--alien-bright);
+}
+
+.unit-tab.active,
+.mode-tab.active {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.45), rgba(109, 40, 217, 0.55));
+  color: #f8f0ff;
+  box-shadow: 0 0 0 1px rgba(216, 180, 254, 0.35), 0 4px 14px rgba(88, 28, 135, 0.35);
+}
+
+.weight-of-oils-card .card-title-row {
+  margin-bottom: 0.65rem;
+}
+
+.weight-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.65rem 0.75rem;
+  align-items: end;
+}
+
+.weight-fields .full {
+  grid-column: 1 / -1;
+}
+
+.oils-subhead {
+  margin-top: 1.1rem;
+  padding-top: 0.85rem;
+  border-top: 1px dashed rgba(186, 120, 255, 0.16);
+}
+
+.oil-table.mode-percent .oil-row input.weight-input:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+
+.oil-table.mode-weight .oil-row input.pct-input:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+
+.oil-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+  margin-top: 0.65rem;
+}
+
+.pct-total-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.75rem;
+  font-size: 0.82rem;
+}
+
+.pct-status {
+  font-weight: 750;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(12, 4, 24, 0.4);
+}
+
+.pct-status.ok {
+  color: #bbf7d0;
+  border-color: rgba(74, 222, 128, 0.35);
+  background: rgba(22, 101, 52, 0.28);
+}
+
+.pct-status.bad {
+  color: #fecaca;
+  border-color: rgba(248, 113, 113, 0.4);
+  background: rgba(127, 29, 29, 0.28);
+}
+
+.pct-hint {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.muted-inline {
+  color: var(--muted);
+}
+
+.notes-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--muted);
+}
+
+.notes-field textarea {
+  width: 100%;
+  min-height: 4.5rem;
+  resize: vertical;
+  background: rgba(12, 4, 24, 0.55);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.65rem 0.75rem;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.notes-field textarea:focus {
+  outline: none;
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.18);
+}
+
+.oil-row input.pct-input,
+.oil-row input.weight-input {
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  .weight-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .head-actions {
+    width: 100%;
+  }
+
+  .unit-tabs {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .unit-tab {
+    flex: 1 1 0;
+    text-align: center;
+  }
+}
+
 .linkish {
   border: none;
   background: none;
@@ -300,13 +472,18 @@
 
 .oil-head,
 .oil-row {
-  grid-template-columns: minmax(0, 1.4fr) 110px 64px 40px;
+  grid-template-columns: minmax(0, 1.4fr) 110px 72px 40px;
 }
 
 @media (max-width: 560px) {
   .oil-head,
   .oil-row {
-    grid-template-columns: minmax(0, 1fr) 100px 40px;
+    grid-template-columns: minmax(0, 1fr) 88px 64px 36px;
+  }
+
+  .oil-head .hide-sm,
+  .oil-row .hide-sm {
+    display: initial;
   }
 }
 
