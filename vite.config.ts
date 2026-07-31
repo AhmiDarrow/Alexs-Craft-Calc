@@ -9,7 +9,16 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'brand-mark.svg', 'apple-touch-icon.png', 'pwa-192.png', 'pwa-512.png'],
+      includeAssets: [
+        'favicon.svg',
+        'favicon-32.png',
+        'brand-mark.svg',
+        'brand-soap.png',
+        'apple-touch-icon.png',
+        'pwa-192.png',
+        'pwa-512.png',
+        'pwa-maskable-512.png',
+      ],
       manifest: {
         name: "Alex's Craft Calc",
         short_name: "Alex's Calc",
