@@ -79,13 +79,19 @@ export default function App() {
       <header className="app-header">
         <div className="brand">
           <img
-            src="/brand-mark.svg"
+            src="/brand-soap.png"
             alt=""
             className="brand-mark"
             width={44}
             height={44}
             onError={(e) => {
               const el = e.currentTarget
+              // Fall back to SVG mark, then initials
+              if (!el.dataset.fallback) {
+                el.dataset.fallback = '1'
+                el.src = '/brand-mark.svg'
+                return
+              }
               el.style.display = 'none'
               const fallback = el.nextElementSibling as HTMLElement | null
               if (fallback) fallback.style.display = 'grid'

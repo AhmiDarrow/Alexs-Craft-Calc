@@ -1,15 +1,77 @@
 /**
- * Rasterize brand SVG into PWA PNG icons using pure Node (no native deps).
- * Creates a simple purple alien-mark PNG set if sharp isn't available.
+ * Build PWA / web icons for Alex's Craft Calc.
+ * Prefer the ComfyUI soap-bar master (public/app-icon-source.png or ../app-icon.png).
+ * Falls back to a procedural Alien Purple mark if no master is present.
  */
-import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs'
+import { writeFileSync, readFileSync, existsSync, mkdirSync, copyFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { deflateSync } from 'node:zlib'
+import { spawnSync } from 'node:child_process'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const publicDir = join(__dirname, '..', 'public')
+const root = join(__dirname, '..')
+const publicDir = join(root, 'public')
 mkdirSync(publicDir, { recursive: true })
+
+const masters = [
+  join(publicDir, 'app-icon-source.png'),
+  join(root, 'app-icon.png'),
+  join(publicDir, 'app-icon-rounded.png'),
+]
+
+const master = masters.find((p) => existsSync(p))
+
+function tryPillowResize() {
+  if (!master) return false
+  const pyCandidates = [
+    process.env.COMFYUI_PYTHON,
+    'C:\\Users\\Administrator\\Documents\\comfy\\ComfyUI\\.venv\\Scripts\\python.exe',
+    'python',
+    'py',
+  ].filter(Boolean)
+
+  const script = `
+from PIL import Image
+from pathlib import Path
+src = Path(r"""${master.replace(/\\/g, '\\\\')}""")
+public = Path(r"""${publicDir.replace(/\\/g, '\\\\')}""")
+img = Image.open(src).convert("RGBA")
+sizes = {
+    "pwa-512.png": 512,
+    "pwa-192.png": 192,
+    "pwa-maskable-512.png": 512,
+    "apple-touch-icon.png": 180,
+    "favicon-32.png": 32,
+    "brand-soap.png": 128,
+    "icon-soap.png": 512,
+}
+for name, size in sizes.items():
+    out = img.resize((size, size), Image.Resampling.LANCZOS)
+    out.save(public / name, "PNG")
+    print("wrote", name, size)
+# keep brand-mark.png in sync for UI
+(public / "brand-mark.png").write_bytes((public / "brand-soap.png").read_bytes())
+print("wrote brand-mark.png")
+`
+  for (const py of pyCandidates) {
+    const r = spawnSync(py, ['-c', script], { encoding: 'utf8' })
+    if (r.status === 0) {
+      console.log(r.stdout)
+      return true
+    }
+  }
+  // No Pillow — at least copy master to key slots if sizes match-ish
+  try {
+    copyFileSync(master, join(publicDir, 'pwa-512.png'))
+    copyFileSync(master, join(publicDir, 'pwa-maskable-512.png'))
+    copyFileSync(master, join(publicDir, 'app-icon-source.png'))
+    console.log('copied master without resize (install Pillow for full set)')
+    return true
+  } catch {
+    return false
+  }
+}
 
 function crc32(buf) {
   let c = ~0
@@ -30,7 +92,6 @@ function chunk(type, data) {
 }
 
 function makePng(size) {
-  // Deep purple bg + soft violet orb + star highlight
   const raw = Buffer.alloc((size * 4 + 1) * size)
   const cx = size / 2
   const cy = size / 2
@@ -42,7 +103,6 @@ function makePng(size) {
       const dx = (x - cx) / size
       const dy = (y - cy) / size
       const d = Math.sqrt(dx * dx + dy * dy)
-      // rounded square mask
       const nx = Math.abs(dx) * 2
       const ny = Math.abs(dy) * 2
       const corner = 0.72
@@ -57,25 +117,34 @@ function makePng(size) {
       if (!inRound) {
         a = 0
       } else {
-        // base gradient
         const t = Math.min(1, d * 1.6)
         r = Math.round(40 + (168 - 40) * (1 - t) + 30 * (1 - y / size))
         g = Math.round(16 + (85 - 16) * (1 - t))
         b = Math.round(70 + (247 - 70) * (1 - t * 0.8))
-        // star glow center-top
+        // soap-bar silhouette (rounded rect in center)
+        const bx = Math.abs(dx) / 0.34
+        const by = Math.abs(dy + 0.02) / 0.22
+        const bar =
+          Math.max(bx, by) < 0.85 ||
+          (Math.max(0, bx - 0.7) ** 2 + Math.max(0, by - 0.7) ** 2 < 0.09)
+        if (bar) {
+          const shade = 0.55 + 0.35 * (1 - by * 0.5) + 0.1 * Math.sin(dx * 18)
+          r = Math.min(255, Math.round(120 + shade * 100))
+          g = Math.min(255, Math.round(70 + shade * 60))
+          b = Math.min(255, Math.round(200 + shade * 40))
+          // top highlight
+          if (dy < -0.02 && dy > -0.16 && Math.abs(dx) < 0.28) {
+            r = Math.min(255, r + 50)
+            g = Math.min(255, g + 40)
+            b = Math.min(255, b + 30)
+          }
+        }
         const sx = (x - cx) / size
         const sy = (y - cy * 0.55) / size
         const star = Math.exp(-(sx * sx * 40 + sy * sy * 28))
-        r = Math.min(255, Math.round(r + star * 120))
-        g = Math.min(255, Math.round(g + star * 90))
-        b = Math.min(255, Math.round(b + star * 80))
-        // border ring
-        const edge = Math.abs(Math.max(nx, ny) - 0.92)
-        if (edge < 0.06) {
-          r = Math.min(255, r + 60)
-          g = Math.min(255, g + 40)
-          b = Math.min(255, b + 80)
-        }
+        r = Math.min(255, Math.round(r + star * 40))
+        g = Math.min(255, Math.round(g + star * 30))
+        b = Math.min(255, Math.round(b + star * 50))
       }
       raw[i] = r
       raw[i + 1] = g
@@ -102,16 +171,25 @@ function makePng(size) {
   ])
 }
 
-for (const size of [192, 512]) {
-  const out = join(publicDir, `pwa-${size}.png`)
-  writeFileSync(out, makePng(size))
-  console.log('wrote', out)
+if (tryPillowResize()) {
+  console.log('icons from soap master:', master)
+} else {
+  console.log('no soap master — procedural fallback')
+  for (const size of [192, 512]) {
+    const out = join(publicDir, `pwa-${size}.png`)
+    writeFileSync(out, makePng(size))
+    console.log('wrote', out)
+  }
+  writeFileSync(join(publicDir, 'apple-touch-icon.png'), makePng(180))
+  writeFileSync(join(publicDir, 'pwa-maskable-512.png'), makePng(512))
+  writeFileSync(join(publicDir, 'favicon-32.png'), makePng(32))
+  writeFileSync(join(publicDir, 'brand-soap.png'), makePng(128))
+  console.log('done fallback')
 }
 
-// apple touch
-writeFileSync(join(publicDir, 'apple-touch-icon.png'), makePng(180))
-console.log('wrote apple-touch-icon.png')
+// Ensure source is present in public for docs/rebuilds
+if (master && !existsSync(join(publicDir, 'app-icon-source.png'))) {
+  copyFileSync(master, join(publicDir, 'app-icon-source.png'))
+}
 
-// maskable slightly larger safe zone — same generator is fine
-writeFileSync(join(publicDir, 'pwa-maskable-512.png'), makePng(512))
-console.log('done')
+console.log('make-icons complete')

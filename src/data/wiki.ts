@@ -51,7 +51,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
       },
       {
         heading: 'Keyboard',
-        body: 'F1 — open / close wiki\nEsc — close wiki or dialogs\n? button — same as F1 on touch devices',
+        body: 'F1 — open / close wiki\nEsc — on phone: back to article list, then close; on desktop: close wiki\n? button — same as F1 on touch devices\n\nPhone wiki is one full page at a time: browse/search the list, tap an article to read it full-screen, then ← All articles (or Esc) to go back. No split panes.',
       },
     ],
   },

@@ -40,6 +40,7 @@ Press **F1** anytime for the full **Craft Wiki** — app help plus a real encycl
 - Full oil encyclopedia (all 30 oils) and wax guide (all profiles)
 - Categories, search, tags, keyboard: **F1** toggle · **Esc** close · **Ctrl+/**
 - Deep-link from calculators into the matching oil/wax page
+- **Phone:** one full page at a time (list ↔ article) — no split panes; **← All articles** or Esc goes back
 
 ### Recipe export / import
 - **Export** — downloads `.alex-soap.json` / `.alex-candle.json` for one recipe
