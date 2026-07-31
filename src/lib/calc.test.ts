@@ -22,6 +22,7 @@ function nearly(a: number, b: number, eps = 0.05) {
 {
   const r = calculateSoap({
     ...defaultSoapInput(),
+    unit: 'g',
     oils: [{ oilId: 'olive', amount: 1000 }],
     superfatPct: 0,
     waterMethod: 'percent_oils',
@@ -38,6 +39,7 @@ function nearly(a: number, b: number, eps = 0.05) {
 {
   const r = calculateSoap({
     ...defaultSoapInput(),
+    unit: 'g',
     oils: [{ oilId: 'olive', amount: 1000 }],
     superfatPct: 5,
     fragrancePct: 0,
@@ -45,23 +47,26 @@ function nearly(a: number, b: number, eps = 0.05) {
   nearly(r.lyeWithSuperfat, 135 * 0.95)
 }
 
-// Everyday bar mix sanity
+// Everyday bar mix sanity (default unit is oz; same mass as 1000 g bar)
 {
-  const r = calculateSoap(defaultSoapInput())
-  assert(r.totalOils === 1000, 'default oils total 1000')
+  const d = defaultSoapInput()
+  assert(d.unit === 'oz', 'default soap unit is ounces')
+  const r = calculateSoap(d)
+  nearly(r.totalOils, convertWeight(1000, 'g', 'oz'), 0.02)
   assert(r.lyeWithSuperfat > 0, 'lye > 0')
   assert(r.water > 0, 'water > 0')
-  // coconut 250 * 0.183 + olive 400 * 0.135 + palm 250 * 0.142 + castor 100 * 0.128
-  const pure =
+  // SAP is mass/mass — pure lye in oz equals gram-recipe pure lye converted to oz
+  const pureG =
     250 * 0.183 + 400 * 0.135 + 250 * 0.142 + 100 * 0.128
-  nearly(r.pureLye, pure)
-  nearly(r.lyeWithSuperfat, pure * 0.95)
+  nearly(r.pureLye, convertWeight(pureG, 'g', 'oz'), 0.02)
+  nearly(r.lyeWithSuperfat, convertWeight(pureG * 0.95, 'g', 'oz'), 0.02)
 }
 
 // KOH factor
 {
   const na = calculateSoap({
     ...defaultSoapInput(),
+    unit: 'g',
     oils: [{ oilId: 'coconut', amount: 100 }],
     lyeType: 'naoh',
     superfatPct: 0,
@@ -69,6 +74,7 @@ function nearly(a: number, b: number, eps = 0.05) {
   })
   const ko = calculateSoap({
     ...defaultSoapInput(),
+    unit: 'g',
     oils: [{ oilId: 'coconut', amount: 100 }],
     lyeType: 'koh',
     superfatPct: 0,
@@ -81,6 +87,7 @@ function nearly(a: number, b: number, eps = 0.05) {
 {
   const r = calculateSoap({
     ...defaultSoapInput(),
+    unit: 'g',
     oils: [{ oilId: 'olive', amount: 1000 }],
     superfatPct: 0,
     waterMethod: 'lye_concentration',
@@ -147,7 +154,8 @@ function nearly(a: number, b: number, eps = 0.05) {
 // Percent-derived recipe matches weight recipe lye
 {
   const byWeight = calculateSoap(defaultSoapInput())
-  const byPctOils = oilsFromPercents(1000, [
+  const totalOz = byWeight.totalOils
+  const byPctOils = oilsFromPercents(totalOz, [
     { oilId: 'olive', pct: 40 },
     { oilId: 'coconut', pct: 25 },
     { oilId: 'palm', pct: 25 },
@@ -155,7 +163,7 @@ function nearly(a: number, b: number, eps = 0.05) {
   ])
   const byPct = calculateSoap({ ...defaultSoapInput(), oils: byPctOils })
   nearly(byPct.pureLye, byWeight.pureLye, 0.05)
-  nearly(byPct.totalOils, 1000)
+  nearly(byPct.totalOils, totalOz, 0.05)
 }
 
 // Recipe export pack round-trip (no DOM / localStorage required)

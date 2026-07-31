@@ -10,7 +10,7 @@ Press **F1** anytime for the full **Craft Wiki** — app help plus a real encycl
 
 ### Soap calculator
 - 30 oils/butters with industry-standard NaOH SAP values + craft encyclopedia blurbs
-- **Weight of oils:** unit tabs **g · oz · lb** + dedicated **Total oils weight**
+- **Weight of oils:** unit tabs **g · oz · lb** (default **oz**) + dedicated **Total oils weight**
 - Entry modes: **By weight** (live %) or **By %** (weights from total; lye locked until % = 100)
 - NaOH (bar) or KOH (liquid) — KOH = NaOH × 1.4027
 - Superfat % with live lye adjustment

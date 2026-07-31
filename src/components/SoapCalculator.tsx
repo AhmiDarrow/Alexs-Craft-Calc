@@ -125,9 +125,13 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
   const [lyeConcentrationPct, setLyeConcentrationPct] = useState('33')
   const [waterDiscountPct, setWaterDiscountPct] = useState('0')
   const [fragrancePct, setFragrancePct] = useState('3')
-  const [unit, setUnit] = useState<SoapUnit>('g')
+  const [unit, setUnit] = useState<SoapUnit>('oz')
   const [oilEntryMode, setOilEntryMode] = useState<OilEntryMode>('weight')
-  const [totalOilsWeight, setTotalOilsWeight] = useState('1000')
+  const [totalOilsWeight, setTotalOilsWeight] = useState(() => {
+    const d = defaultSoapInput()
+    const total = d.oils.reduce((s, o) => s + o.amount, 0)
+    return fmtNum(total, 4)
+  })
   const [recipeName, setRecipeName] = useState('')
   const [recipeNotes, setRecipeNotes] = useState('')
   const [saved, setSaved] = useState<SavedSoapRecipe[]>(() => listSoapRecipes())
@@ -286,10 +290,15 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
   }
 
   function applyPreset(oils: OilLine[], name?: string) {
-    const next = rowsFromWeightOils(oils)
+    // Presets are authored in grams; convert into the active unit (default oz).
+    const converted = oils.map((o) => ({
+      oilId: o.oilId,
+      amount: convertWeight(o.amount, 'g', unit),
+    }))
+    const next = rowsFromWeightOils(converted)
     setRows(next)
-    const total = oils.reduce((s, o) => s + o.amount, 0)
-    setTotalOilsWeight(fmtNum(total, 2))
+    const total = converted.reduce((s, o) => s + o.amount, 0)
+    setTotalOilsWeight(fmtNum(total, 4))
     if (name) setRecipeName(name)
     if (oilEntryMode === 'percent') {
       // keep % mode; amounts already derived from weights→pcts
@@ -393,7 +402,8 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
     setUnit(d.unit)
     setOilEntryMode('weight')
     setRows(rowsFromWeightOils(d.oils))
-    setTotalOilsWeight('1000')
+    const total = d.oils.reduce((s, o) => s + o.amount, 0)
+    setTotalOilsWeight(fmtNum(total, 4))
     setRecipeName('')
     setRecipeNotes('')
     onToast?.('Soap calculator reset')
@@ -459,7 +469,8 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
 
   function loadRecipe(r: SavedSoapRecipe) {
     const mode: OilEntryMode = r.oilEntryMode === 'percent' ? 'percent' : 'weight'
-    const nextUnit: SoapUnit = r.unit === 'oz' || r.unit === 'lb' ? r.unit : 'g'
+    const nextUnit: SoapUnit =
+      r.unit === 'g' || r.unit === 'lb' || r.unit === 'oz' ? r.unit : 'oz'
     let nextRows: OilRow[] = r.oils.map((o) => ({
       key: uid(),
       oilId: o.oilId,
@@ -900,6 +911,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
                 </div>
                 <input
                   type="number"
+                  className="weight-input"
                   min="0"
                   step="any"
                   inputMode="decimal"
@@ -915,7 +927,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
                     max="100"
                     step="any"
                     inputMode="decimal"
-                    className={overMax ? 'warn-input' : undefined}
+                    className={'pct-input' + (overMax ? ' warn-input' : '')}
                     value={row.pct}
                     disabled={oilEntryMode === 'weight'}
                     onChange={(e) => updateRow(row.key, { pct: e.target.value })}

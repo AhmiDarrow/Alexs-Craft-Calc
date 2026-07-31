@@ -401,6 +401,25 @@
   width: 100%;
 }
 
+.pct-input-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.pct-input-wrap .pct-suffix {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.oil-row input.warn-input {
+  border-color: rgba(255, 210, 122, 0.65);
+  color: var(--warn);
+}
+
 @media (max-width: 640px) {
   .weight-fields {
     grid-template-columns: 1fr;
@@ -441,14 +460,20 @@
 /* Oil row with info chip */
 .oil-select-wrap {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.3rem;
   align-items: center;
   min-width: 0;
+  width: 100%;
 }
 
 .oil-select-wrap select {
   min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  /* Leave room for native dropdown arrow + long oil names */
+  padding-right: 1.75rem;
+  text-overflow: ellipsis;
 }
 
 .info-chip {
@@ -476,14 +501,32 @@
 }
 
 @media (max-width: 560px) {
-  .oil-head,
-  .oil-row {
-    grid-template-columns: minmax(0, 1fr) 88px 64px 36px;
+  /* Keep stacked mobile oil-row from App.css — do not force a cramped 4-col grid */
+  .oil-head {
+    display: none;
   }
 
-  .oil-head .hide-sm,
-  .oil-row .hide-sm {
-    display: initial;
+  .oil-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px;
+    grid-template-areas:
+      'oil oil oil'
+      'wt pct rm';
+  }
+
+  .oil-row > .oil-select-wrap {
+    grid-area: oil;
+  }
+
+  .oil-row > .weight-input {
+    grid-area: wt;
+  }
+
+  .oil-row > .pct-input-wrap {
+    grid-area: pct;
+  }
+
+  .oil-row > .icon-btn {
+    grid-area: rm;
   }
 }
 

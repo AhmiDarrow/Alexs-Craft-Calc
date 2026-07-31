@@ -4,6 +4,16 @@ All notable changes to **Alex's Craft Calc** are documented here.
 
 ## [Unreleased]
 
+## [1.0.3] — 2026-07-31
+
+### Changed
+- Soap **default unit is ounces (oz)** for Total oils weight and oil amounts (same mass as the classic 1000 g everyday bar)
+- Unit tabs still fully selectable: **g · oz · lb** — switching converts weights live
+
+### Fixed
+- **Mobile oil dropdowns** — oil rows stack full-width on phones so selects are no longer clipped or hard to open
+- Safer small-screen padding / overflow on soap cards
+
 ## [1.0.2] — 2026-07-31
 
 ### Added

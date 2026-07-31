@@ -456,7 +456,9 @@
 label input,
 label select,
 .oil-row input,
-.oil-row select {
+.oil-row select,
+.field-grid select,
+.seg select {
   font: inherit;
   color: var(--text);
   background: rgba(12, 4, 24, 0.55);
@@ -465,9 +467,29 @@ label select,
   padding: 0.55rem 0.7rem;
   outline: none;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   transition:
     border-color 0.15s ease,
     box-shadow 0.15s ease;
+}
+
+/* Native selects: keep arrow visible and text from clipping on mobile */
+label select,
+.oil-row select,
+.field-grid select,
+.seg select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--alien-bright) 50%),
+    linear-gradient(135deg, var(--alien-bright) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) calc(50% - 3px),
+    calc(100% - 9px) calc(50% - 3px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 1.85rem;
 }
 
 label input:focus,
@@ -556,9 +578,59 @@ label select:focus,
     display: none !important;
   }
 
-  .oil-head,
+  /* Stack oil rows so the oil <select> is full-width and usable on phones */
+  .oil-head {
+    display: none;
+  }
+
   .oil-row {
-    grid-template-columns: 1fr 100px 40px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px;
+    grid-template-areas:
+      'oil oil oil'
+      'wt pct rm';
+    gap: 0.45rem 0.4rem;
+    padding: 0.65rem 0.55rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: rgba(12, 4, 24, 0.35);
+  }
+
+  .oil-row > .oil-select-wrap {
+    grid-area: oil;
+    width: 100%;
+  }
+
+  .oil-row > .weight-input {
+    grid-area: wt;
+    min-width: 0;
+  }
+
+  .oil-row > .pct-input-wrap {
+    grid-area: pct;
+    min-width: 0;
+  }
+
+  .oil-row > .icon-btn {
+    grid-area: rm;
+    justify-self: end;
+  }
+
+  /* Lye / water / wax field selects need full width on phones */
+  .field-grid label,
+  .field-grid select,
+  .card label select {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .app-main {
+    padding-left: max(0.85rem, env(safe-area-inset-left));
+    padding-right: max(0.85rem, env(safe-area-inset-right));
+    overflow-x: clip;
+  }
+
+  .card {
+    overflow: visible;
   }
 }
 

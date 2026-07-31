@@ -1,7 +1,7 @@
 {
   "name": "alexs-craft-calc",
   "private": true,
-  "version": "1.0.2",
+  "version": "1.0.3",
   "type": "module",
   "description": "Alex's Craft Calc — Alien Purple soap & candle calculator, Windows desktop + Android",
   "scripts": {

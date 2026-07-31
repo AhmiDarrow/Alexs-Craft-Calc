@@ -250,12 +250,14 @@ export function calculateSoap(input: SoapInput): SoapResult {
 }
 
 export function defaultSoapInput(): SoapInput {
+  // Default unit is ounces (common kitchen / US craft scale).
+  // Same mass as the classic 1000 g everyday bar (≈ 35.274 oz).
   return {
     oils: [
-      { oilId: 'olive', amount: 400 },
-      { oilId: 'coconut', amount: 250 },
-      { oilId: 'palm', amount: 250 },
-      { oilId: 'castor', amount: 100 },
+      { oilId: 'olive', amount: round(fromGrams(400, 'oz'), 4) },
+      { oilId: 'coconut', amount: round(fromGrams(250, 'oz'), 4) },
+      { oilId: 'palm', amount: round(fromGrams(250, 'oz'), 4) },
+      { oilId: 'castor', amount: round(fromGrams(100, 'oz'), 4) },
     ],
     lyeType: 'naoh',
     superfatPct: 5,
@@ -264,6 +266,6 @@ export function defaultSoapInput(): SoapInput {
     lyeConcentrationPct: 33,
     waterDiscountPct: 0,
     fragrancePct: 3,
-    unit: 'g',
+    unit: 'oz',
   }
 }
