@@ -22,17 +22,13 @@ import {
   copyText,
   currentSoapSnapshot,
   deleteSoapRecipe,
-  downloadSharePack,
-  exportLibraryPack,
-  exportSoapPack,
-  formatImportSummary,
   formatSavedAt,
-  importRecipesFromText,
   listSoapRecipes,
-  mergeImportedRecipes,
+  loadRecipesFromFile,
   RECIPE_FILE_ACCEPT,
-  readFileAsText,
   saveSoapRecipe,
+  shareLibrary,
+  shareSoapRecipe,
   type SavedSoapRecipe,
 } from '../lib/storage'
 
@@ -730,39 +726,17 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
     w.document.close()
   }
 
-  function handleExportCurrent() {
-    const recipe = currentSoapRecipe()
-    downloadSharePack(exportSoapPack(recipe))
-    onToast?.(`Exported “${recipe.name}” (.alex-soap.json)`)
-  }
-
-  function handleExportLibrary() {
-    const pack = exportLibraryPack()
-    const n = (pack.soap?.length || 0) + (pack.candle?.length || 0)
-    if (n === 0) {
-      onToast?.('No saved recipes to export')
-      return
-    }
-    downloadSharePack(pack)
-    onToast?.(`Exported library (${pack.soap?.length || 0} soap, ${pack.candle?.length || 0} candle)`)
-  }
-
-  async function handleImportFile(file: File | null) {
+  /** Load = pick a recipe/library file and merge into Saved (replaces Import). */
+  async function handleLoadFile(file: File | null) {
     if (!file) return
     try {
-      const text = await readFileAsText(file)
-      const parsed = importRecipesFromText(text)
-      if (!parsed.ok) {
-        onToast?.(parsed.error)
-        return
-      }
-      // Merge first so editor binds to the stable library id (not the throwaway parse id).
-      const merged = mergeImportedRecipes(parsed)
+      const result = await loadRecipesFromFile(file)
       setSaved(listSoapRecipes())
-      if (!merged.write.ok) {
-        onToast?.(merged.write.error)
+      if (!result.ok) {
+        onToast?.(result.error)
         return
       }
+      const { parsed, merged, summary } = result
       if (
         merged.lastSoap &&
         parsed.kind === 'soap' &&
@@ -771,12 +745,25 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
       ) {
         loadRecipe(merged.lastSoap)
       }
-      onToast?.(formatImportSummary(merged))
-    } catch {
-      onToast?.('Could not read that file')
+      onToast?.(summary)
     } finally {
       if (importRef.current) importRef.current.value = ''
     }
+  }
+
+  /** Share current recipe via OS share sheet (phone) or download (desktop). */
+  async function handleShare() {
+    const recipe = currentSoapRecipe()
+    const result = await shareSoapRecipe(recipe, formatRecipeText())
+    if (result.mode === 'cancelled') return
+    onToast?.(result.message)
+  }
+
+  /** Share full soap+candle library backup (long-press Share or saved-list action). */
+  async function handleShareLibrary() {
+    const result = await shareLibrary()
+    if (result.mode === 'cancelled') return
+    onToast?.(result.message)
   }
 
   const recipeBalanced = pctOk && weightsOk && parsedTotalOils > 0
@@ -834,30 +821,31 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
             <button type="button" className="chip" onClick={() => setShowSaved((v) => !v)}>
               {showSaved ? 'Hide saved' : `Saved (${saved.length})`}
             </button>
+            <button
+              type="button"
+              className="chip"
+              onClick={() => importRef.current?.click()}
+              title="Load a recipe or library backup file into Saved"
+            >
+              Load
+            </button>
+            <button
+              type="button"
+              className="chip"
+              onClick={handleShare}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                void handleShareLibrary()
+              }}
+              title="Share recipe (phone share sheet or download). Right-click / long-press: share full library"
+            >
+              Share
+            </button>
             <button type="button" className="chip" onClick={handleCopy} title="Copy batch text">
               Copy
             </button>
             <button type="button" className="chip" onClick={handlePrint}>
               Print
-            </button>
-            <button type="button" className="chip" onClick={handleExportCurrent} title="Download .alex-soap.json">
-              Export
-            </button>
-            <button
-              type="button"
-              className="chip"
-              onClick={() => importRef.current?.click()}
-              title="Import recipe JSON"
-            >
-              Import
-            </button>
-            <button
-              type="button"
-              className="chip"
-              onClick={handleExportLibrary}
-              title="Export all saved soap + candle recipes"
-            >
-              Export all
             </button>
           </div>
           <input
@@ -865,8 +853,8 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
             type="file"
             accept={RECIPE_FILE_ACCEPT}
             className="sr-only"
-            aria-label="Import recipe file"
-            onChange={(e) => handleImportFile(e.target.files?.[0] ?? null)}
+            aria-label="Load recipe or library file"
+            onChange={(e) => void handleLoadFile(e.target.files?.[0] ?? null)}
           />
         </div>
         <label className="notes-field">
@@ -887,6 +875,18 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
         {showSaved && (
           <div className="saved-list">
             {saved.length === 0 && <p className="hint">No saved soap recipes yet.</p>}
+            {saved.length > 0 && (
+              <div className="saved-list-actions">
+                <button
+                  type="button"
+                  className="chip"
+                  onClick={() => void handleShareLibrary()}
+                  title="Share or download every saved soap + candle recipe"
+                >
+                  Share library
+                </button>
+              </div>
+            )}
             {saved.map((r) => (
               <div
                 key={r.id}

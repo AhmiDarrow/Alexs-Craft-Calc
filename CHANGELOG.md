@@ -4,6 +4,20 @@ All notable changes to **Alex's Craft Calc** are documented here.
 
 ## [Unreleased]
 
+## [1.0.5] — 2026-08-09
+
+### Changed
+- **Unified recipe I/O** — toolbar is now **Save / Saved / Load / Share** (plus Copy · Print)
+- Removed separate **Import · Export · Export all** buttons; same portable JSON still works via Load / Share
+- **Load** picks a recipe file or library backup and merges into Saved (opens single recipes in the editor)
+- **Share** uses the phone/OS share sheet when available; otherwise downloads the portable file
+  - Right-click / long-press Share → share full library
+  - Saved list includes **Share library**
+
+### Added
+- `loadRecipesFromFile` / `shareRecipes` helpers in storage (native file → native text → download → clipboard fallbacks)
+- Wiki + tests updated for Load / Share flows
+
 ## [1.0.4] — 2026-08-09
 
 ### Fixed

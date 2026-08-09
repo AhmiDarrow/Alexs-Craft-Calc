@@ -268,7 +268,13 @@ async function testSharePacks() {
   assert(!bad.ok, 'invalid json rejected')
 
   // formatImportSummary + merge return shape (no localStorage required for summary)
-  const { formatImportSummary, formatSavedAt } = await import('./storage')
+  const {
+    formatImportSummary,
+    formatSavedAt,
+    canNativeShare,
+    shareRecipes,
+    loadRecipesFromFile,
+  } = await import('./storage')
   assert(
     formatImportSummary({ soapSaved: 1, candleSaved: 0, soapUpdated: 1, candleUpdated: 0 }).includes(
       'new soap',
@@ -283,6 +289,33 @@ async function testSharePacks() {
   )
   assert(formatSavedAt('not-a-date') === '', 'bad date empty')
   assert(formatSavedAt(new Date().toISOString()).length > 0, 'good date formats')
+
+  // Node/test env has no navigator.share — canNativeShare is false
+  assert(canNativeShare() === false, 'no native share in node test env')
+
+  // shareRecipes without DOM download/clipboard still returns a structured result
+  const shareResult = await shareRecipes(soapPack, { plainText: 'Test castile batch' })
+  assert(typeof shareResult.ok === 'boolean', 'share result ok flag')
+  assert(
+    shareResult.mode === 'download' ||
+      shareResult.mode === 'copied' ||
+      shareResult.mode === 'failed' ||
+      shareResult.mode === 'native-file' ||
+      shareResult.mode === 'native-text' ||
+      shareResult.mode === 'cancelled',
+    'share mode enum',
+  )
+  assert(typeof shareResult.message === 'string' && shareResult.message.length > 0, 'share message')
+
+  // loadRecipesFromFile rejects empty / bad files without throwing
+  const emptyFile = new File([''], 'empty.json', { type: 'application/json' })
+  const emptyLoad = await loadRecipesFromFile(emptyFile)
+  assert(!emptyLoad.ok, 'empty file load fails')
+  if (!emptyLoad.ok) assert(emptyLoad.error.length > 0, 'empty load error text')
+
+  const badFile = new File(['{not json'], 'bad.json', { type: 'application/json' })
+  const badLoad = await loadRecipesFromFile(badFile)
+  assert(!badLoad.ok, 'bad json load fails')
 }
 
 await testSharePacks()

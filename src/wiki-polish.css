@@ -198,8 +198,19 @@
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  max-height: 180px;
+  max-height: 220px;
   overflow: auto;
+}
+
+.saved-list-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.15rem 0.1rem 0.25rem;
+  position: sticky;
+  top: 0;
+  background: linear-gradient(180deg, rgba(18, 8, 32, 0.96), rgba(18, 8, 32, 0.88));
+  z-index: 1;
 }
 
 .saved-item {

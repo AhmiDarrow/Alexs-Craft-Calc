@@ -22,8 +22,9 @@ Press **F1** anytime for the full **Craft Wiki** — app help plus a real encycl
 - Weighted iodine & INS + hardness body hint
 - Presets: **Custom** (blank — no oils) · Castile-ish · Everyday Bar · Creamy Shea · Palm-free · Luxury Butter
 - **Custom recipe notes** field (saved with the recipe)
-- Save / load / delete recipes (local)
-- **Export · Import · Export all** (portable JSON — includes total ceiling, notes)
+- Save / load / delete recipes (local library)
+- **Load** portable JSON (single recipe or full library backup) → merges into Saved
+- **Share** current recipe (or full library) via OS share sheet / download
 - Copy recipe · Print batch sheet
 - Per-oil wiki deep-links (ⓘ)
 
@@ -37,7 +38,7 @@ Press **F1** anytime for the full **Craft Wiki** — app help plus a real encycl
 - Pour / melt temperature notes
 - Units: g · oz · lb (converts wax weights)
 - Save / load recipes · Copy batch text
-- **Export · Import · Export all** (same portable format as soap)
+- **Load** / **Share** (same portable format as soap)
 
 ### Craft Wiki (F1)
 - **75 articles**: app manual + soap craft + candle craft + safety + reference
@@ -46,11 +47,11 @@ Press **F1** anytime for the full **Craft Wiki** — app help plus a real encycl
 - Deep-link from calculators into the matching oil/wax page
 - **Phone:** one full page at a time (list ↔ article) — no split panes; **← All articles**, Esc, or system **Back** returns article → list → calculator (does not exit the app first)
 
-### Recipe export / import
-- **Export** — downloads `.alex-soap.json` / `.alex-candle.json` for one recipe
-- **Import** — load a friend’s file or your backup (also accepts bare recipe objects)
-- **Export all** — full soap + candle library dump for backup / device moves
-- Format: `alex-craft-calc-recipe` v1 (round-trips cleanly)
+### Recipe save / load / share
+- **Save** — store or update the active recipe in the local library
+- **Load** — pick a friend’s `.alex-soap.json` / `.alex-candle.json` or a library backup (also accepts bare recipe objects); merges into Saved
+- **Share** — native share sheet on phone when available; otherwise downloads the portable file (right-click / long-press Share for full library)
+- Format: `alex-craft-calc-recipe` v1 (round-trips cleanly; old Export files still Load)
 
 ### App
 - Alien Purple dark UI + ComfyUI brand art
@@ -147,4 +148,4 @@ START.bat               One-click web launcher
 Alien Purple — void blacks, amethyst gradients, neon violet accents.
 
 ---
-Built for Ahmi · Alex's Craft Calc v1.0.4
+Built for Ahmi · Alex's Craft Calc v1.0.5

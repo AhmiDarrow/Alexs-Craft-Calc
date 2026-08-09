@@ -761,3 +761,202 @@ export function formatSavedAt(iso: string): string {
     return ''
   }
 }
+
+/* ─── Unified Load / Share (import+export folded here) ───────────────── */
+
+export type LoadRecipesResult =
+  | {
+      ok: true
+      parsed: Extract<ImportResult, { ok: true }>
+      merged: MergeImportResult
+      summary: string
+    }
+  | { ok: false; error: string }
+
+/**
+ * One-shot Load: read a recipe/library file, merge into local storage, return
+ * stable library ids for the editor. Replaces separate import plumbing.
+ */
+export async function loadRecipesFromFile(file: File): Promise<LoadRecipesResult> {
+  try {
+    const text = await readFileAsText(file)
+    const parsed = parseSharePayload(text)
+    if (!parsed.ok) return { ok: false, error: parsed.error }
+    const merged = mergeImportedRecipes(parsed)
+    if (!merged.write.ok) {
+      return { ok: false, error: merged.write.error }
+    }
+    return {
+      ok: true,
+      parsed,
+      merged,
+      summary: formatImportSummary(merged),
+    }
+  } catch {
+    return { ok: false, error: 'Could not read that file' }
+  }
+}
+
+export type ShareMode = 'native-file' | 'native-text' | 'download' | 'copied' | 'cancelled' | 'failed'
+
+export type ShareRecipesResult = {
+  ok: boolean
+  mode: ShareMode
+  message: string
+}
+
+function packFilename(pack: RecipeSharePack): string {
+  if (pack.kind === 'soap' && pack.soap?.[0]) {
+    return `${safeFilename(pack.soap[0].name, 'soap-recipe')}.alex-soap.json`
+  }
+  if (pack.kind === 'candle' && pack.candle?.[0]) {
+    return `${safeFilename(pack.candle[0].name, 'candle-recipe')}.alex-candle.json`
+  }
+  const stamp = new Date().toISOString().slice(0, 10)
+  return `alex-craft-library-${stamp}.json`
+}
+
+function packShareTitle(pack: RecipeSharePack): string {
+  if (pack.kind === 'soap' && pack.soap?.[0]) return `Soap: ${pack.soap[0].name}`
+  if (pack.kind === 'candle' && pack.candle?.[0]) return `Candle: ${pack.candle[0].name}`
+  const n = (pack.soap?.length || 0) + (pack.candle?.length || 0)
+  return `Alex's Craft Calc library (${n})`
+}
+
+function packShareText(pack: RecipeSharePack, plainSummary?: string): string {
+  if (plainSummary && plainSummary.trim()) {
+    return `${plainSummary.trim()}\n\n— Alex's Craft Calc recipe file attached (or use Load in the app).`
+  }
+  if (pack.kind === 'soap' && pack.soap?.[0]) {
+    const r = pack.soap[0]
+    return `Soap recipe “${r.name}” · ${r.oils.length} oils · ${r.lyeType.toUpperCase()} · SF ${r.superfatPct}%\nOpen in Alex's Craft Calc → Load`
+  }
+  if (pack.kind === 'candle' && pack.candle?.[0]) {
+    const r = pack.candle[0]
+    return `Candle recipe “${r.name}” · ${r.vesselCount} vessels · ${r.fragrancePct}% FO\nOpen in Alex's Craft Calc → Load`
+  }
+  return `Alex's Craft Calc library backup — Load this file in the app to restore recipes.`
+}
+
+/** True when the platform exposes a classic share sheet (phones, some desktops). */
+export function canNativeShare(): boolean {
+  try {
+    return typeof navigator !== 'undefined' && typeof navigator.share === 'function'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Classic Share: prefer OS/app share sheet with a recipe file (Messages, Drive,
+ * WhatsApp, Mail, Nearby, etc.). Falls back to download, then clipboard JSON.
+ * Replaces separate Export / Export-all buttons for day-to-day use.
+ */
+export async function shareRecipes(
+  pack: RecipeSharePack,
+  opts?: { plainText?: string },
+): Promise<ShareRecipesResult> {
+  const json = packToJson(pack)
+  const filename = packFilename(pack)
+  const title = packShareTitle(pack)
+  const text = packShareText(pack, opts?.plainText)
+  const mime = 'application/json'
+
+  // 1) Native share with file (Android Chrome, iOS 15+, etc.)
+  if (canNativeShare() && typeof File !== 'undefined') {
+    try {
+      const file = new File([json], filename, { type: mime })
+      const dataWithFile: ShareData = { files: [file], title, text }
+      let fileOk = false
+      try {
+        if (typeof navigator.canShare === 'function') {
+          fileOk = navigator.canShare({ files: [file] })
+        } else {
+          fileOk = true
+        }
+      } catch {
+        fileOk = false
+      }
+      if (fileOk) {
+        try {
+          await navigator.share(dataWithFile)
+          return { ok: true, mode: 'native-file', message: 'Shared recipe file' }
+        } catch (err) {
+          const name = err instanceof DOMException ? err.name : ''
+          if (name === 'AbortError') {
+            return { ok: false, mode: 'cancelled', message: 'Share cancelled' }
+          }
+          // fall through to text / download
+        }
+      }
+
+      // 2) Native share text-only (still opens Messages / Mail / …)
+      try {
+        const textPayload = `${title}\n\n${text}\n\n----- recipe json -----\n${json}`
+        // Keep share sheet payloads reasonable
+        const clipped =
+          textPayload.length > 120_000
+            ? `${title}\n\n${text}\n\n(Recipe too large for text share — use Load with a saved backup file.)`
+            : textPayload
+        if (typeof navigator.canShare === 'function' && !navigator.canShare({ text: clipped, title })) {
+          /* skip */
+        } else {
+          await navigator.share({ title, text: clipped })
+          return { ok: true, mode: 'native-text', message: 'Shared via device share sheet' }
+        }
+      } catch (err) {
+        const name = err instanceof DOMException ? err.name : ''
+        if (name === 'AbortError') {
+          return { ok: false, mode: 'cancelled', message: 'Share cancelled' }
+        }
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+
+  // 3) Desktop / no share API — download portable file (old Export path)
+  try {
+    downloadSharePack(pack)
+    return {
+      ok: true,
+      mode: 'download',
+      message: `Downloaded ${filename}`,
+    }
+  } catch {
+    /* fall through */
+  }
+
+  // 4) Last resort — clipboard
+  const copied = await copyText(json)
+  if (copied) {
+    return { ok: true, mode: 'copied', message: 'Recipe JSON copied — paste into a file or message' }
+  }
+  return { ok: false, mode: 'failed', message: 'Could not share or download recipe' }
+}
+
+/** Share only the current soap recipe (file + summary). */
+export async function shareSoapRecipe(
+  recipe: SavedSoapRecipe,
+  plainText?: string,
+): Promise<ShareRecipesResult> {
+  return shareRecipes(buildSoapSharePack(recipe), { plainText })
+}
+
+/** Share only the current candle recipe (file + summary). */
+export async function shareCandleRecipe(
+  recipe: SavedCandleRecipe,
+  plainText?: string,
+): Promise<ShareRecipesResult> {
+  return shareRecipes(buildCandleSharePack(recipe), { plainText })
+}
+
+/** Share full local library (backup / move phones). */
+export async function shareLibrary(): Promise<ShareRecipesResult> {
+  const pack = buildLibrarySharePack()
+  const n = (pack.soap?.length || 0) + (pack.candle?.length || 0)
+  if (n === 0) {
+    return { ok: false, mode: 'failed', message: 'No saved recipes to share' }
+  }
+  return shareRecipes(pack)
+}

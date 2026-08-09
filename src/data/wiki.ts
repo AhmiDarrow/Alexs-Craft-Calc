@@ -113,8 +113,8 @@ export const WIKI_ARTICLES: WikiArticle[] = [
         body: '% of oils - simple classic (e.g. 33% water relative to oil weight).\nLye concentration - water from lye / (lye+water); 33% concentration is a common full-water starting point; higher concentration = less water, faster cure, thicker trace.\nWater discount - legacy style off ~38% full water.',
       },
       {
-        heading: 'Recipes, export & import',
-        body: 'Save stores the full recipe (oils, mode, total oils, notes, units) in this browser. Load restores it. Copy batch puts a text summary on the clipboard. Print opens a clean batch sheet.\n\nExport downloads a portable .alex-soap.json file friends can Import. Export all dumps every saved soap + candle recipe into one library file - great for backup or moving phones/PCs.',
+        heading: 'Recipes, Save / Load / Share',
+        body: 'Save stores the full recipe (oils, mode, total oils, notes, units) in this browser. Saved opens your library — tap a row to load it into the editor. Copy puts a text summary on the clipboard. Print opens a clean batch sheet.\n\nLoad merges a portable .alex-soap.json / library backup into your saved recipes (single recipes also open in the editor). Share opens the phone share sheet (Messages, Drive, WhatsApp, Mail, Nearby…) with a recipe file when the OS supports it; on desktop it downloads the same portable file. Long-press Share (or use Share library from the saved list) to back up every soap + candle recipe at once.',
       },
     ]
   },
@@ -134,8 +134,8 @@ export const WIKI_ARTICLES: WikiArticle[] = [
         body: 'FO % is percent of wax weight (industry norm for candles). Warnings fire below/above the profile’s typical band. Dye blocks/lb is a rough chip guide — pigments differ; start light.',
       },
       {
-        heading: 'Results, export & import',
-        body: 'Total FO, wax, per-vessel splits, dye estimate, wick paragraph, pour/melt notes. Save / copy / print work like the soap side. Export produces a portable .alex-candle.json (or full library via Export all). Import loads a friend’s file or your backup — single candle recipes also apply to the calculator immediately.',
+        heading: 'Results, Save / Load / Share',
+        body: 'Total FO, wax, per-vessel splits, dye estimate, wick paragraph, pour/melt notes. Save, Copy, and Print work like the soap side. Load merges a friend’s .alex-candle.json or a full library backup into Saved — a single candle recipe also opens in the editor immediately. Share sends the portable recipe file through the phone share sheet (or downloads it on desktop). Long-press Share to share the whole library backup.',
       },
     ],
   },
@@ -147,7 +147,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     summary: 'Desktop app window and phone home screen.',
     sections: [
       {
-        body: 'This is a Progressive Web App. In Chrome or Edge on Windows: open the app → ⋮ menu → Install Alex\'s Craft Calc. You get a standalone window and cached shell for offline use after the first visit.\n\nPhone (same Wi‑Fi as the PC running the server, or any hosted URL): open the site → Share / menu → Add to Home Screen.\n\nRecipes save in localStorage on that device/browser — export via Copy if you need a backup.',
+        body: 'This is a Progressive Web App. In Chrome or Edge on Windows: open the app → ⋮ menu → Install Alex\'s Craft Calc. You get a standalone window and cached shell for offline use after the first visit.\n\nPhone (same Wi‑Fi as the PC running the server, or any hosted URL): open the site → Share / menu → Add to Home Screen.\n\nRecipes save in localStorage on that device/browser. Use Share (recipe or full library) or Load with a backup file to move recipes between phones and PCs. Copy still pastes a plain-text batch sheet anywhere.',
       },
     ],
   },
