@@ -1,12 +1,15 @@
 import {
+  amountFromCeilingPct,
   calculateSoap,
   convertWeight,
   defaultSoapInput,
   emptyLockedResult,
   isPercentTotalLocked,
   oilsFromPercents,
+  pctOfCeiling,
   percentsFromOils,
   sumOilPercents,
+  weightsMatchCeiling,
 } from './soapCalc'
 import { calculateCandle, defaultCandleInput, suggestWick } from './candleCalc'
 
@@ -129,9 +132,10 @@ function nearly(a: number, b: number, eps = 0.05) {
   nearly(convertWeight(1000, 'g', 'g'), 1000)
 }
 
-// Percent ↔ weight helpers + 100% lock gate
+// Percent ↔ weight helpers + 100% lock gate + ceiling model
 {
-  const oils = oilsFromPercents(1000, [
+  const ceiling = 1000
+  const oils = oilsFromPercents(ceiling, [
     { oilId: 'olive', pct: 40 },
     { oilId: 'coconut', pct: 25 },
     { oilId: 'palm', pct: 25 },
@@ -140,8 +144,16 @@ function nearly(a: number, b: number, eps = 0.05) {
   nearly(oils[0].amount, 400)
   nearly(oils[1].amount, 250)
   nearly(oils[3].amount, 100)
-  const back = percentsFromOils(oils)
+  // % of ceiling (not share-of-sum of a partial batch)
+  const back = percentsFromOils(oils, ceiling)
   nearly(sumOilPercents(back.map((b) => b.pct)), 100, 0.01)
+  nearly(pctOfCeiling(400, ceiling), 40)
+  nearly(amountFromCeilingPct(25, ceiling), 250)
+  assert(weightsMatchCeiling(oils.map((o) => o.amount), ceiling), 'weights match ceiling')
+  assert(!weightsMatchCeiling([400, 250], ceiling), 'partial weights fail ceiling')
+  // Editing one oil does not imply renormalizing others — 40% alone is not 100%
+  const oneOil = percentsFromOils([{ oilId: 'olive', amount: 400 }], ceiling)
+  nearly(oneOil[0].pct, 40)
   assert(isPercentTotalLocked(100), '100 locks open')
   assert(isPercentTotalLocked(99.97), 'within eps locks open')
   assert(!isPercentTotalLocked(99.9), 'short stays locked')
@@ -164,6 +176,9 @@ function nearly(a: number, b: number, eps = 0.05) {
   const byPct = calculateSoap({ ...defaultSoapInput(), oils: byPctOils })
   nearly(byPct.pureLye, byWeight.pureLye, 0.05)
   nearly(byPct.totalOils, totalOz, 0.05)
+  // Ceiling % round-trip on default oz batch
+  const ceilingPcts = percentsFromOils(byPctOils, totalOz)
+  nearly(sumOilPercents(ceilingPcts.map((p) => p.pct)), 100, 0.05)
 }
 
 // Recipe export pack round-trip (no DOM / localStorage required)
@@ -189,7 +204,7 @@ async function testSharePacks() {
     waterDiscountPct: 0,
     fragrancePct: 3,
     unit: 'lb',
-    oilEntryMode: 'percent',
+    oilEntryMode: 'dual',
     totalOilsWeight: 2.2,
     notes: 'Custom lavender batch notes',
   })
@@ -203,8 +218,8 @@ async function testSharePacks() {
     assert(soapParsed.soap?.[0]?.oils[0]?.oilId === 'olive', 'olive oil')
     assert(soapParsed.soap?.[0]?.superfatPct === 5, 'sf 5')
     assert(soapParsed.soap?.[0]?.unit === 'lb', 'lb unit round-trip')
-    assert(soapParsed.soap?.[0]?.oilEntryMode === 'percent', 'entry mode')
-    assert(soapParsed.soap?.[0]?.totalOilsWeight === 2.2, 'total oils')
+    assert(soapParsed.soap?.[0]?.oilEntryMode === 'dual', 'dual entry mode')
+    assert(soapParsed.soap?.[0]?.totalOilsWeight === 2.2, 'total oils ceiling')
     assert(soapParsed.soap?.[0]?.notes?.includes('lavender'), 'notes field')
   }
 
@@ -221,12 +236,14 @@ async function testSharePacks() {
     dyeBlocksPerLb: 1,
     unit: 'g',
     vesselDiameterIn: 3,
+    notes: 'CD-10 wick, 2nd pour top-off',
   })
   const candleParsed = parseSharePayload(packToJson(candlePack))
   assert(candleParsed.ok, 'candle parse ok')
   if (candleParsed.ok) {
     assert(candleParsed.kind === 'candle', 'candle kind')
     assert(candleParsed.candle?.[0]?.waxId === 'soy-111', 'wax id')
+    assert(candleParsed.candle?.[0]?.notes?.includes('CD-10'), 'candle notes')
   }
 
   // Bare recipe object (friend pasted without wrapper)
@@ -249,6 +266,23 @@ async function testSharePacks() {
 
   const bad = parseSharePayload('{not json')
   assert(!bad.ok, 'invalid json rejected')
+
+  // formatImportSummary + merge return shape (no localStorage required for summary)
+  const { formatImportSummary, formatSavedAt } = await import('./storage')
+  assert(
+    formatImportSummary({ soapSaved: 1, candleSaved: 0, soapUpdated: 1, candleUpdated: 0 }).includes(
+      'new soap',
+    ),
+    'import summary new soap',
+  )
+  assert(
+    formatImportSummary({ soapSaved: 0, candleSaved: 0, soapUpdated: 0, candleUpdated: 0 }).includes(
+      'Nothing',
+    ),
+    'import summary empty',
+  )
+  assert(formatSavedAt('not-a-date') === '', 'bad date empty')
+  assert(formatSavedAt(new Date().toISOString()).length > 0, 'good date formats')
 }
 
 await testSharePacks()

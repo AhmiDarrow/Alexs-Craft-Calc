@@ -9,7 +9,10 @@ export function ModeToggle({ mode, onChange }: ModeToggleProps) {
       <button
         type="button"
         role="tab"
+        id="mode-tab-soap"
+        aria-controls="mode-panel-soap"
         aria-selected={mode === 'soap'}
+        tabIndex={mode === 'soap' ? 0 : -1}
         className={mode === 'soap' ? 'active' : ''}
         onClick={() => onChange('soap')}
       >
@@ -21,7 +24,10 @@ export function ModeToggle({ mode, onChange }: ModeToggleProps) {
       <button
         type="button"
         role="tab"
+        id="mode-tab-candle"
+        aria-controls="mode-panel-candle"
         aria-selected={mode === 'candle'}
+        tabIndex={mode === 'candle' ? 0 : -1}
         className={mode === 'candle' ? 'active' : ''}
         onClick={() => onChange('candle')}
       >

@@ -11,17 +11,32 @@ type Mode = 'soap' | 'candle'
 
 const MODE_KEY = 'alien-craft-mode'
 
+function readMode(): Mode {
+  try {
+    if (typeof localStorage === 'undefined') return 'soap'
+    return localStorage.getItem(MODE_KEY) === 'candle' ? 'candle' : 'soap'
+  } catch {
+    return 'soap'
+  }
+}
+
+function writeMode(mode: Mode) {
+  try {
+    if (typeof localStorage === 'undefined') return
+    localStorage.setItem(MODE_KEY, mode)
+  } catch {
+    /* private mode / blocked storage — mode still works in-session */
+  }
+}
+
 export default function App() {
-  const [mode, setMode] = useState<Mode>(() => {
-    const saved = localStorage.getItem(MODE_KEY)
-    return saved === 'candle' ? 'candle' : 'soap'
-  })
+  const [mode, setMode] = useState<Mode>(() => readMode())
   const [wikiOpen, setWikiOpen] = useState(false)
   const [wikiId, setWikiId] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
 
   useEffect(() => {
-    localStorage.setItem(MODE_KEY, mode)
+    writeMode(mode)
     document.documentElement.dataset.mode = mode
   }, [mode])
 
@@ -124,7 +139,13 @@ export default function App() {
         <img src="/banner-art.png" alt="" className="hero-banner" />
       </div>
 
-      <main className="app-main" key={mode}>
+      <main
+        className="app-main"
+        key={mode}
+        id={mode === 'soap' ? 'mode-panel-soap' : 'mode-panel-candle'}
+        role="tabpanel"
+        aria-labelledby={mode === 'soap' ? 'mode-tab-soap' : 'mode-tab-candle'}
+      >
         {mode === 'soap' ? (
           <SoapCalculator onOpenWiki={openWiki} onToast={showToast} />
         ) : (

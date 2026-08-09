@@ -98,11 +98,11 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     sections: [
       {
         heading: 'Weight of oils',
-        body: 'Pick g, oz, or lb with the unit tabs. Enter a dedicated Total oils weight for the whole batch — this is the combined oil weight, not each oil alone. Switch entry mode:\n• By weight — type each oil amount; live % updates automatically. Use Scale oils to total to hit your batch size.\n• By % — type each oil as a percentage of the total. Weights fill in from Total oils. Lye/water stay locked until percentages total exactly 100% (warning shown while short or over).',
+        body: 'Pick g, oz, or lb with the unit tabs. Enter a dedicated Total oils weight — this is the recipe ceiling (combined oil batch size). It does not change when you type individual oils.\n\nEach oil row has both Weight and % of total always editable:\n• Type a weight → that oil’s % updates from weight ÷ Total oils. Other oils stay put.\n• Type a % → that oil’s weight updates from % × Total oils. Other oils stay put.\n\nOptional helpers: Scale weights to total (keeps ratios) and Apply % to weights. Lye/water results stay locked until oil % totals 100% and oil weights sum to the Total oils ceiling.',
       },
       {
         heading: 'Oils table',
-        body: 'Add rows for each oil/butter. Weight and % columns stay in sync with the active entry mode. Tap the info chip on an oil (or open wiki for that oil) for encyclopedia notes. SAP used in results is NaOH or KOH depending on lye type. Custom recipe notes sit under the recipe toolbar for batch reminders, FO blend, mold, cure plan, etc.',
+        body: 'Add rows for each oil/butter. Weight and % are both live against the Total oils ceiling — the app never auto-rewrites your other oils after you enter a weight. Tap the info chip on an oil (or open wiki for that oil) for encyclopedia notes. SAP used in results is NaOH or KOH depending on lye type. Custom recipe notes sit under the recipe toolbar for batch reminders, FO blend, mold, cure plan, etc.',
       },
       {
         heading: 'Lye & superfat',

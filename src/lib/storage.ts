@@ -7,6 +7,9 @@ const PREFS_KEY = 'alien-craft-prefs'
 export const SHARE_FORMAT = 'alex-craft-calc-recipe' as const
 export const SHARE_VERSION = 1 as const
 
+/** Max recipes kept per library (oldest beyond this are dropped). */
+export const MAX_SAVED_RECIPES = 60
+
 export interface SavedSoapRecipe {
   id: string
   name: string
@@ -20,9 +23,9 @@ export interface SavedSoapRecipe {
   waterDiscountPct: number
   fragrancePct: number
   unit: 'g' | 'oz' | 'lb'
-  /** How oils were entered when saved */
-  oilEntryMode?: 'weight' | 'percent'
-  /** Dedicated total oils weight (used heavily in % mode) */
+  /** How oils were entered when saved (dual = weight+% both live; ceiling = totalOilsWeight) */
+  oilEntryMode?: 'weight' | 'percent' | 'dual'
+  /** Fixed Total oils ceiling — batch size oils must match */
   totalOilsWeight?: number
   /** Free-form maker notes / custom recipe field */
   notes?: string
@@ -42,6 +45,8 @@ export interface SavedCandleRecipe {
   unit: 'g' | 'oz' | 'lb'
   vesselDiameterIn: number
   vesselPresetId?: string
+  /** Free-form maker notes */
+  notes?: string
 }
 
 /** Portable recipe pack — single recipe or a library dump */
@@ -67,8 +72,51 @@ export type ImportResult =
     }
   | { ok: false; error: string }
 
+export type StorageWriteResult =
+  | { ok: true }
+  | { ok: false; error: string }
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+}
+
+function isSoapRecipe(v: unknown): v is SavedSoapRecipe {
+  if (!isRecord(v)) return false
+  if (typeof v.name !== 'string' || !Array.isArray(v.oils)) return false
+  if (v.lyeType !== 'naoh' && v.lyeType !== 'koh') return false
+  if (typeof v.superfatPct !== 'number' || !Number.isFinite(v.superfatPct)) return false
+  if (
+    v.waterMethod !== 'percent_oils' &&
+    v.waterMethod !== 'lye_concentration' &&
+    v.waterMethod !== 'discount'
+  )
+    return false
+  if (v.unit !== 'g' && v.unit !== 'oz' && v.unit !== 'lb') return false
+  return v.oils.every(
+    (o) =>
+      isRecord(o) &&
+      typeof o.oilId === 'string' &&
+      o.oilId.length > 0 &&
+      typeof o.amount === 'number' &&
+      Number.isFinite(o.amount),
+  )
+}
+
+function isCandleRecipe(v: unknown): v is SavedCandleRecipe {
+  if (!isRecord(v)) return false
+  if (typeof v.name !== 'string' || typeof v.waxId !== 'string' || !v.waxId) return false
+  if (typeof v.vesselCount !== 'number' || !Number.isFinite(v.vesselCount)) return false
+  if (typeof v.waxPerVessel !== 'number' || !Number.isFinite(v.waxPerVessel)) return false
+  if (typeof v.useTotalWax !== 'boolean') return false
+  if (typeof v.totalWax !== 'number' || !Number.isFinite(v.totalWax)) return false
+  if (typeof v.fragrancePct !== 'number' || !Number.isFinite(v.fragrancePct)) return false
+  if (v.unit !== 'g' && v.unit !== 'oz' && v.unit !== 'lb') return false
+  return true
+}
+
 function readJson<T>(key: string, fallback: T): T {
   try {
+    if (typeof localStorage === 'undefined') return fallback
     const raw = localStorage.getItem(key)
     if (!raw) return fallback
     return JSON.parse(raw) as T
@@ -77,67 +125,171 @@ function readJson<T>(key: string, fallback: T): T {
   }
 }
 
-function writeJson(key: string, value: unknown) {
+function writeJson(key: string, value: unknown): StorageWriteResult {
   try {
+    if (typeof localStorage === 'undefined') {
+      return { ok: false, error: 'Storage is not available in this environment' }
+    }
     localStorage.setItem(key, JSON.stringify(value))
-  } catch {
-    /* quota / private mode */
+    return { ok: true }
+  } catch (err) {
+    const name = err instanceof DOMException ? err.name : ''
+    if (name === 'QuotaExceededError' || name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+      return { ok: false, error: 'Storage full — export a backup, then delete old recipes' }
+    }
+    if (name === 'SecurityError') {
+      return { ok: false, error: 'Storage blocked (private / restricted mode)' }
+    }
+    return { ok: false, error: 'Could not save to local storage' }
   }
+}
+
+function newSoapId(): string {
+  return `soap-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+}
+
+function newCandleId(): string {
+  return `candle-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+}
+
+function sortBySavedAtDesc<T extends { savedAt: string }>(items: T[]): T[] {
+  return [...items].sort((a, b) => b.savedAt.localeCompare(a.savedAt))
+}
+
+function sanitizeSoapList(raw: unknown): SavedSoapRecipe[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter(isSoapRecipe)
+    .map((r) => normalizeSoap(r, false))
+    .filter((r) => r.id && r.name)
+}
+
+function sanitizeCandleList(raw: unknown): SavedCandleRecipe[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter(isCandleRecipe)
+    .map((r) => normalizeCandle(r, false))
+    .filter((r) => r.id && r.name)
 }
 
 export function listSoapRecipes(): SavedSoapRecipe[] {
-  return readJson<SavedSoapRecipe[]>(SOAP_RECIPES_KEY, []).sort((a, b) =>
-    b.savedAt.localeCompare(a.savedAt),
-  )
+  return sortBySavedAtDesc(sanitizeSoapList(readJson<unknown>(SOAP_RECIPES_KEY, [])))
 }
 
+export function listCandleRecipes(): SavedCandleRecipe[] {
+  return sortBySavedAtDesc(sanitizeCandleList(readJson<unknown>(CANDLE_RECIPES_KEY, [])))
+}
+
+export function getSoapRecipe(id: string): SavedSoapRecipe | undefined {
+  return listSoapRecipes().find((r) => r.id === id)
+}
+
+export function getCandleRecipe(id: string): SavedCandleRecipe | undefined {
+  return listCandleRecipes().find((r) => r.id === id)
+}
+
+/**
+ * Save soap recipe.
+ * - If `id` matches an existing recipe → update that slot (stable id).
+ * - Else if same name (case-insensitive) exists → overwrite that slot, keep its id.
+ * - Else insert as new.
+ */
 export function saveSoapRecipe(
   recipe: Omit<SavedSoapRecipe, 'id' | 'savedAt'> & { id?: string },
-): SavedSoapRecipe {
+): { recipe: SavedSoapRecipe; write: StorageWriteResult; overwritten: boolean } {
   const all = listSoapRecipes()
-  const entry: SavedSoapRecipe = {
-    ...recipe,
-    id: recipe.id || `soap-${Date.now().toString(36)}`,
-    savedAt: new Date().toISOString(),
+  const nameKey = (recipe.name || '').trim().toLowerCase()
+  let idx = -1
+  if (recipe.id) {
+    idx = all.findIndex((r) => r.id === recipe.id)
   }
-  const idx = all.findIndex((r) => r.id === entry.id || r.name === entry.name)
+  if (idx < 0 && nameKey) {
+    idx = all.findIndex((r) => r.name.trim().toLowerCase() === nameKey)
+  }
+
+  const keepId = idx >= 0 ? all[idx].id : recipe.id || newSoapId()
+  const entry = normalizeSoap(
+    {
+      ...recipe,
+      id: keepId,
+      savedAt: new Date().toISOString(),
+      name: recipe.name,
+      oils: recipe.oils,
+      lyeType: recipe.lyeType,
+      superfatPct: recipe.superfatPct,
+      waterMethod: recipe.waterMethod,
+      waterAsPercentOfOils: recipe.waterAsPercentOfOils,
+      lyeConcentrationPct: recipe.lyeConcentrationPct,
+      waterDiscountPct: recipe.waterDiscountPct,
+      fragrancePct: recipe.fragrancePct,
+      unit: recipe.unit,
+      oilEntryMode: recipe.oilEntryMode,
+      totalOilsWeight: recipe.totalOilsWeight,
+      notes: recipe.notes,
+    } as SavedSoapRecipe,
+    false,
+  )
+
+  const overwritten = idx >= 0
   if (idx >= 0) all[idx] = entry
   else all.unshift(entry)
-  writeJson(SOAP_RECIPES_KEY, all.slice(0, 40))
-  return entry
+
+  const write = writeJson(SOAP_RECIPES_KEY, sortBySavedAtDesc(all).slice(0, MAX_SAVED_RECIPES))
+  return { recipe: entry, write, overwritten }
 }
 
-export function deleteSoapRecipe(id: string) {
-  writeJson(
+export function deleteSoapRecipe(id: string): StorageWriteResult {
+  return writeJson(
     SOAP_RECIPES_KEY,
     listSoapRecipes().filter((r) => r.id !== id),
   )
 }
 
-export function listCandleRecipes(): SavedCandleRecipe[] {
-  return readJson<SavedCandleRecipe[]>(CANDLE_RECIPES_KEY, []).sort((a, b) =>
-    b.savedAt.localeCompare(a.savedAt),
-  )
-}
-
 export function saveCandleRecipe(
   recipe: Omit<SavedCandleRecipe, 'id' | 'savedAt'> & { id?: string },
-): SavedCandleRecipe {
+): { recipe: SavedCandleRecipe; write: StorageWriteResult; overwritten: boolean } {
   const all = listCandleRecipes()
-  const entry: SavedCandleRecipe = {
-    ...recipe,
-    id: recipe.id || `candle-${Date.now().toString(36)}`,
-    savedAt: new Date().toISOString(),
+  const nameKey = (recipe.name || '').trim().toLowerCase()
+  let idx = -1
+  if (recipe.id) {
+    idx = all.findIndex((r) => r.id === recipe.id)
   }
-  const idx = all.findIndex((r) => r.id === entry.id || r.name === entry.name)
+  if (idx < 0 && nameKey) {
+    idx = all.findIndex((r) => r.name.trim().toLowerCase() === nameKey)
+  }
+
+  const keepId = idx >= 0 ? all[idx].id : recipe.id || newCandleId()
+  const entry = normalizeCandle(
+    {
+      ...recipe,
+      id: keepId,
+      savedAt: new Date().toISOString(),
+      name: recipe.name,
+      waxId: recipe.waxId,
+      vesselCount: recipe.vesselCount,
+      waxPerVessel: recipe.waxPerVessel,
+      useTotalWax: recipe.useTotalWax,
+      totalWax: recipe.totalWax,
+      fragrancePct: recipe.fragrancePct,
+      dyeBlocksPerLb: recipe.dyeBlocksPerLb,
+      unit: recipe.unit,
+      vesselDiameterIn: recipe.vesselDiameterIn,
+      vesselPresetId: recipe.vesselPresetId,
+      notes: recipe.notes,
+    } as SavedCandleRecipe,
+    false,
+  )
+
+  const overwritten = idx >= 0
   if (idx >= 0) all[idx] = entry
   else all.unshift(entry)
-  writeJson(CANDLE_RECIPES_KEY, all.slice(0, 40))
-  return entry
+
+  const write = writeJson(CANDLE_RECIPES_KEY, sortBySavedAtDesc(all).slice(0, MAX_SAVED_RECIPES))
+  return { recipe: entry, write, overwritten }
 }
 
-export function deleteCandleRecipe(id: string) {
-  writeJson(
+export function deleteCandleRecipe(id: string): StorageWriteResult {
+  return writeJson(
     CANDLE_RECIPES_KEY,
     listCandleRecipes().filter((r) => r.id !== id),
   )
@@ -148,16 +300,20 @@ export interface AppPrefs {
 }
 
 export function getPrefs(): AppPrefs {
-  return readJson<AppPrefs>(PREFS_KEY, {})
+  const raw = readJson<unknown>(PREFS_KEY, {})
+  if (!isRecord(raw)) return {}
+  const out: AppPrefs = {}
+  if (typeof raw.lastWikiId === 'string') out.lastWikiId = raw.lastWikiId.slice(0, 120)
+  return out
 }
 
-export function setPrefs(patch: Partial<AppPrefs>) {
-  writeJson(PREFS_KEY, { ...getPrefs(), ...patch })
+export function setPrefs(patch: Partial<AppPrefs>): StorageWriteResult {
+  return writeJson(PREFS_KEY, { ...getPrefs(), ...patch })
 }
 
 export async function copyText(text: string): Promise<boolean> {
   try {
-    if (navigator.clipboard?.writeText) {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text)
       return true
     }
@@ -165,6 +321,7 @@ export async function copyText(text: string): Promise<boolean> {
     /* fall through */
   }
   try {
+    if (typeof document === 'undefined') return false
     const ta = document.createElement('textarea')
     ta.value = text
     ta.style.position = 'fixed'
@@ -179,65 +336,52 @@ export async function copyText(text: string): Promise<boolean> {
   }
 }
 
-/* ─── Export / import ─────────────────────────────────────────────────── */
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v)
-}
-
-function isSoapRecipe(v: unknown): v is SavedSoapRecipe {
-  if (!isRecord(v)) return false
-  if (typeof v.name !== 'string' || !Array.isArray(v.oils)) return false
-  if (v.lyeType !== 'naoh' && v.lyeType !== 'koh') return false
-  if (typeof v.superfatPct !== 'number') return false
-  if (
-    v.waterMethod !== 'percent_oils' &&
-    v.waterMethod !== 'lye_concentration' &&
-    v.waterMethod !== 'discount'
-  )
-    return false
-  if (v.unit !== 'g' && v.unit !== 'oz' && v.unit !== 'lb') return false
-  return v.oils.every(
-    (o) =>
-      isRecord(o) &&
-      typeof o.oilId === 'string' &&
-      typeof o.amount === 'number' &&
-      Number.isFinite(o.amount),
-  )
-}
-
-function isCandleRecipe(v: unknown): v is SavedCandleRecipe {
-  if (!isRecord(v)) return false
-  if (typeof v.name !== 'string' || typeof v.waxId !== 'string') return false
-  if (typeof v.vesselCount !== 'number' || typeof v.waxPerVessel !== 'number') return false
-  if (typeof v.useTotalWax !== 'boolean' || typeof v.totalWax !== 'number') return false
-  if (typeof v.fragrancePct !== 'number') return false
-  if (v.unit !== 'g' && v.unit !== 'oz' && v.unit !== 'lb') return false
-  return true
-}
+/* ─── Normalize ───────────────────────────────────────────────────────── */
 
 function normalizeSoap(r: SavedSoapRecipe, forceNewId = true): SavedSoapRecipe {
-  const unit = r.unit === 'oz' || r.unit === 'lb' ? r.unit : 'g'
+  const unit = r.unit === 'oz' || r.unit === 'lb' || r.unit === 'g' ? r.unit : 'g'
   const oilEntryMode =
-    r.oilEntryMode === 'percent' || r.oilEntryMode === 'weight' ? r.oilEntryMode : 'weight'
+    r.oilEntryMode === 'percent' || r.oilEntryMode === 'weight' || r.oilEntryMode === 'dual'
+      ? r.oilEntryMode
+      : 'dual'
   const notes =
-    typeof r.notes === 'string' ? r.notes.slice(0, 4000) : undefined
+    typeof r.notes === 'string' && r.notes.trim() ? r.notes.trim().slice(0, 4000) : undefined
   const totalOilsWeight =
-    typeof r.totalOilsWeight === 'number' && Number.isFinite(r.totalOilsWeight)
+    typeof r.totalOilsWeight === 'number' && Number.isFinite(r.totalOilsWeight) && r.totalOilsWeight > 0
       ? r.totalOilsWeight
       : undefined
+  const id =
+    !forceNewId && typeof r.id === 'string' && r.id.trim()
+      ? r.id.trim().slice(0, 80)
+      : newSoapId()
+
   return {
-    id: forceNewId ? `soap-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}` : r.id,
-    name: String(r.name).slice(0, 120) || 'Imported soap',
-    savedAt: typeof r.savedAt === 'string' ? r.savedAt : new Date().toISOString(),
-    oils: r.oils.map((o) => ({
-      oilId: o.oilId,
-      amount: o.amount,
-      ...(typeof o.pct === 'number' && Number.isFinite(o.pct) ? { pct: o.pct } : {}),
-    })),
-    lyeType: r.lyeType,
-    superfatPct: r.superfatPct,
-    waterMethod: r.waterMethod,
+    id,
+    name: String(r.name || '').trim().slice(0, 120) || 'Imported soap',
+    savedAt:
+      typeof r.savedAt === 'string' && !Number.isNaN(Date.parse(r.savedAt))
+        ? r.savedAt
+        : new Date().toISOString(),
+    oils: (Array.isArray(r.oils) ? r.oils : [])
+      .filter(
+        (o) =>
+          o &&
+          typeof o.oilId === 'string' &&
+          o.oilId &&
+          typeof o.amount === 'number' &&
+          Number.isFinite(o.amount),
+      )
+      .map((o) => ({
+        oilId: o.oilId,
+        amount: o.amount,
+        ...(typeof o.pct === 'number' && Number.isFinite(o.pct) ? { pct: o.pct } : {}),
+      })),
+    lyeType: r.lyeType === 'koh' ? 'koh' : 'naoh',
+    superfatPct: Number.isFinite(Number(r.superfatPct)) ? Number(r.superfatPct) : 5,
+    waterMethod:
+      r.waterMethod === 'lye_concentration' || r.waterMethod === 'discount'
+        ? r.waterMethod
+        : 'percent_oils',
     waterAsPercentOfOils: Number(r.waterAsPercentOfOils) || 33,
     lyeConcentrationPct: Number(r.lyeConcentrationPct) || 33,
     waterDiscountPct: Number(r.waterDiscountPct) || 0,
@@ -250,24 +394,39 @@ function normalizeSoap(r: SavedSoapRecipe, forceNewId = true): SavedSoapRecipe {
 }
 
 function normalizeCandle(r: SavedCandleRecipe, forceNewId = true): SavedCandleRecipe {
+  const unit = r.unit === 'oz' || r.unit === 'lb' || r.unit === 'g' ? r.unit : 'g'
+  const notes =
+    typeof r.notes === 'string' && r.notes.trim() ? r.notes.trim().slice(0, 4000) : undefined
+  const id =
+    !forceNewId && typeof r.id === 'string' && r.id.trim()
+      ? r.id.trim().slice(0, 80)
+      : newCandleId()
+
   return {
-    id: forceNewId
-      ? `candle-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
-      : r.id,
-    name: String(r.name).slice(0, 120) || 'Imported candle',
-    savedAt: typeof r.savedAt === 'string' ? r.savedAt : new Date().toISOString(),
-    waxId: r.waxId,
-    vesselCount: r.vesselCount,
-    waxPerVessel: r.waxPerVessel,
-    useTotalWax: r.useTotalWax,
-    totalWax: r.totalWax,
-    fragrancePct: r.fragrancePct,
+    id,
+    name: String(r.name || '').trim().slice(0, 120) || 'Imported candle',
+    savedAt:
+      typeof r.savedAt === 'string' && !Number.isNaN(Date.parse(r.savedAt))
+        ? r.savedAt
+        : new Date().toISOString(),
+    waxId: String(r.waxId || 'soy-111'),
+    vesselCount: Math.max(1, Math.floor(Number(r.vesselCount)) || 1),
+    waxPerVessel: Number(r.waxPerVessel) || 0,
+    useTotalWax: Boolean(r.useTotalWax),
+    totalWax: Number(r.totalWax) || 0,
+    fragrancePct: Number(r.fragrancePct) || 0,
     dyeBlocksPerLb: Number(r.dyeBlocksPerLb) || 0,
-    unit: r.unit,
+    unit,
     vesselDiameterIn: Number(r.vesselDiameterIn) || 0,
-    vesselPresetId: r.vesselPresetId,
+    vesselPresetId:
+      typeof r.vesselPresetId === 'string' && r.vesselPresetId
+        ? r.vesselPresetId.slice(0, 40)
+        : undefined,
+    ...(notes ? { notes } : {}),
   }
 }
+
+/* ─── Export / import ─────────────────────────────────────────────────── */
 
 export function buildSoapSharePack(recipe: SavedSoapRecipe): RecipeSharePack {
   return {
@@ -276,7 +435,7 @@ export function buildSoapSharePack(recipe: SavedSoapRecipe): RecipeSharePack {
     app: "Alex's Craft Calc",
     exportedAt: new Date().toISOString(),
     kind: 'soap',
-    soap: [recipe],
+    soap: [normalizeSoap(recipe, false)],
   }
 }
 
@@ -287,7 +446,7 @@ export function buildCandleSharePack(recipe: SavedCandleRecipe): RecipeSharePack
     app: "Alex's Craft Calc",
     exportedAt: new Date().toISOString(),
     kind: 'candle',
-    candle: [recipe],
+    candle: [normalizeCandle(recipe, false)],
   }
 }
 
@@ -308,6 +467,7 @@ export function packToJson(pack: RecipeSharePack): string {
 }
 
 export function downloadJson(filename: string, json: string) {
+  if (typeof document === 'undefined') return
   const blob = new Blob([json], { type: 'application/json;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -346,24 +506,30 @@ export function exportLibraryFile() {
 
 /** Parse recipe JSON — accepts full pack, bare soap recipe, or bare candle recipe */
 export function parseSharePayload(raw: string): ImportResult {
+  const trimmed = (raw || '').replace(/^\uFEFF/, '').trim()
+  if (!trimmed) return { ok: false, error: 'File is empty' }
+
   let data: unknown
   try {
-    data = JSON.parse(raw)
+    data = JSON.parse(trimmed)
   } catch {
     return { ok: false, error: 'Not valid JSON' }
   }
 
-  if (!isRecord(data)) return { ok: false, error: 'Invalid recipe file' }
+  if (!isRecord(data) && !Array.isArray(data)) {
+    return { ok: false, error: 'Invalid recipe file' }
+  }
 
-  // Full share pack
-  if (data.format === SHARE_FORMAT || data.format === 'alien-craft-calc-recipe') {
+  // Full share pack (current + legacy format id)
+  if (isRecord(data) && (data.format === SHARE_FORMAT || data.format === 'alien-craft-calc-recipe')) {
     const soapRaw = Array.isArray(data.soap) ? data.soap.filter(isSoapRecipe) : []
     const candleRaw = Array.isArray(data.candle) ? data.candle.filter(isCandleRecipe) : []
     if (soapRaw.length === 0 && candleRaw.length === 0) {
-      return { ok: false, error: 'Recipe file has no recipes' }
+      return { ok: false, error: 'Recipe file has no valid recipes' }
     }
-    const soap = soapRaw.map((r) => normalizeSoap(r))
-    const candle = candleRaw.map((r) => normalizeCandle(r))
+    // Fresh ids on import so library slots don't collide with local ids
+    const soap = soapRaw.map((r) => normalizeSoap(r, true))
+    const candle = candleRaw.map((r) => normalizeCandle(r, true))
     const kind =
       data.kind === 'library' || (soap.length > 0 && candle.length > 0)
         ? 'library'
@@ -389,8 +555,8 @@ export function parseSharePayload(raw: string): ImportResult {
   }
 
   // Bare soap recipe
-  if (isSoapRecipe(data)) {
-    const soap = [normalizeSoap(data)]
+  if (isRecord(data) && isSoapRecipe(data)) {
+    const soap = [normalizeSoap(data, true)]
     return {
       ok: true,
       kind: 'soap',
@@ -402,8 +568,8 @@ export function parseSharePayload(raw: string): ImportResult {
   }
 
   // Bare candle recipe
-  if (isCandleRecipe(data)) {
-    const candle = [normalizeCandle(data)]
+  if (isRecord(data) && isCandleRecipe(data)) {
+    const candle = [normalizeCandle(data, true)]
     return {
       ok: true,
       kind: 'candle',
@@ -416,8 +582,8 @@ export function parseSharePayload(raw: string): ImportResult {
 
   // Array of mixed recipes
   if (Array.isArray(data)) {
-    const soap = data.filter(isSoapRecipe).map((r) => normalizeSoap(r))
-    const candle = data.filter(isCandleRecipe).map((r) => normalizeCandle(r))
+    const soap = data.filter(isSoapRecipe).map((r) => normalizeSoap(r, true))
+    const candle = data.filter(isCandleRecipe).map((r) => normalizeCandle(r, true))
     if (soap.length === 0 && candle.length === 0) {
       return { ok: false, error: 'No recognized recipes in file' }
     }
@@ -435,29 +601,94 @@ export function parseSharePayload(raw: string): ImportResult {
   return { ok: false, error: 'Unrecognized recipe format' }
 }
 
-/** Merge imported recipes into local library (by name overwrite) */
-export function mergeImportedRecipes(result: Extract<ImportResult, { ok: true }>): {
+export type MergeImportResult = {
   soapSaved: number
   candleSaved: number
-} {
+  soapUpdated: number
+  candleUpdated: number
+  write: StorageWriteResult
+  /** Last soap recipe written (stable library id) — use this after single-file import */
+  lastSoap?: SavedSoapRecipe
+  /** Last candle recipe written (stable library id) */
+  lastCandle?: SavedCandleRecipe
+}
+
+/**
+ * Merge imported recipes into local library.
+ * Matches by name (case-insensitive) so re-import updates rather than duplicates.
+ * Returns write failures if storage is full / blocked.
+ * `lastSoap` / `lastCandle` carry the final library ids (not the throwaway parse ids).
+ */
+export function mergeImportedRecipes(result: Extract<ImportResult, { ok: true }>): MergeImportResult {
   let soapSaved = 0
   let candleSaved = 0
+  let soapUpdated = 0
+  let candleUpdated = 0
+  let lastWrite: StorageWriteResult = { ok: true }
+  let lastSoap: SavedSoapRecipe | undefined
+  let lastCandle: SavedCandleRecipe | undefined
+
   if (result.soap) {
     for (const r of result.soap) {
-      saveSoapRecipe({ ...r, id: undefined })
-      soapSaved++
+      // Drop forced-new id so name-match can update existing library entry
+      const { recipe, write, overwritten } = saveSoapRecipe({ ...r, id: undefined })
+      if (!write.ok) {
+        lastWrite = write
+        break
+      }
+      lastSoap = recipe
+      if (overwritten) soapUpdated++
+      else soapSaved++
     }
   }
-  if (result.candle) {
+  if (lastWrite.ok && result.candle) {
     for (const r of result.candle) {
-      saveCandleRecipe({ ...r, id: undefined })
-      candleSaved++
+      const { recipe, write, overwritten } = saveCandleRecipe({ ...r, id: undefined })
+      if (!write.ok) {
+        lastWrite = write
+        break
+      }
+      lastCandle = recipe
+      if (overwritten) candleUpdated++
+      else candleSaved++
     }
   }
-  return { soapSaved, candleSaved }
+
+  return {
+    soapSaved,
+    candleSaved,
+    soapUpdated,
+    candleUpdated,
+    write: lastWrite,
+    lastSoap,
+    lastCandle,
+  }
+}
+
+/** Human-friendly import summary for toasts */
+export function formatImportSummary(merged: {
+  soapSaved: number
+  candleSaved: number
+  soapUpdated?: number
+  candleUpdated?: number
+}): string {
+  const parts: string[] = []
+  const sNew = merged.soapSaved
+  const sUp = merged.soapUpdated || 0
+  const cNew = merged.candleSaved
+  const cUp = merged.candleUpdated || 0
+  if (sNew) parts.push(`${sNew} new soap`)
+  if (sUp) parts.push(`${sUp} updated soap`)
+  if (cNew) parts.push(`${cNew} new candle`)
+  if (cUp) parts.push(`${cUp} updated candle`)
+  if (!parts.length) return 'Nothing new to import'
+  return `Imported ${parts.join(', ')}`
 }
 
 export async function readFileAsText(file: File): Promise<string> {
+  if (typeof file.text === 'function') {
+    return file.text()
+  }
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(String(reader.result ?? ''))
@@ -467,24 +698,34 @@ export async function readFileAsText(file: File): Promise<string> {
 }
 
 export function currentSoapSnapshot(
-  partial: Omit<SavedSoapRecipe, 'id' | 'savedAt'>,
+  partial: Omit<SavedSoapRecipe, 'id' | 'savedAt'> & { id?: string },
 ): SavedSoapRecipe {
-  return {
-    ...partial,
-    id: `soap-live-${Date.now().toString(36)}`,
-    savedAt: new Date().toISOString(),
-  }
+  return normalizeSoap(
+    {
+      ...partial,
+      id: partial.id || `soap-live-${Date.now().toString(36)}`,
+      savedAt: new Date().toISOString(),
+    } as SavedSoapRecipe,
+    false,
+  )
 }
 
 export function currentCandleSnapshot(
-  partial: Omit<SavedCandleRecipe, 'id' | 'savedAt'>,
+  partial: Omit<SavedCandleRecipe, 'id' | 'savedAt'> & { id?: string },
 ): SavedCandleRecipe {
-  return {
-    ...partial,
-    id: `candle-live-${Date.now().toString(36)}`,
-    savedAt: new Date().toISOString(),
-  }
+  return normalizeCandle(
+    {
+      ...partial,
+      id: partial.id || `candle-live-${Date.now().toString(36)}`,
+      savedAt: new Date().toISOString(),
+    } as SavedCandleRecipe,
+    false,
+  )
 }
+
+/** File input accept string for recipe import */
+export const RECIPE_FILE_ACCEPT =
+  '.json,.alex-soap.json,.alex-candle.json,application/json,text/json,text/plain'
 
 /* Friendly aliases used by calculator UI */
 export const exportSoapPack = buildSoapSharePack
@@ -504,3 +745,19 @@ export function downloadSharePack(pack: RecipeSharePack) {
   exportLibraryFile()
 }
 
+/** Format a short meta line for saved-list rows */
+export function formatSavedAt(iso: string): string {
+  try {
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return ''
+    return d.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  } catch {
+    return ''
+  }
+}

@@ -14,9 +14,13 @@ import {
   downloadSharePack,
   exportCandlePack,
   exportLibraryPack,
+  formatImportSummary,
+  formatSavedAt,
   importRecipesFromText,
   listCandleRecipes,
   mergeImportedRecipes,
+  readFileAsText,
+  RECIPE_FILE_ACCEPT,
   saveCandleRecipe,
   type SavedCandleRecipe,
 } from '../lib/storage'
@@ -39,6 +43,9 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
   const [vesselDiameterIn, setVesselDiameterIn] = useState('3')
   const [vesselPresetId, setVesselPresetId] = useState('custom')
   const [recipeName, setRecipeName] = useState('')
+  const [recipeNotes, setRecipeNotes] = useState('')
+  /** Stable library slot while editing a loaded/saved recipe (enables overwrite-by-id). */
+  const [activeRecipeId, setActiveRecipeId] = useState<string | null>(null)
   const [saved, setSaved] = useState<SavedCandleRecipe[]>(() => listCandleRecipes())
   const [showSaved, setShowSaved] = useState(false)
   const importRef = useRef<HTMLInputElement>(null)
@@ -125,11 +132,16 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
     setUnit(d.unit)
     setVesselDiameterIn(String(d.vesselDiameterIn))
     setVesselPresetId('custom')
+    setRecipeName('')
+    setRecipeNotes('')
+    setActiveRecipeId(null)
+    onToast?.('Candle calculator reset')
   }
 
   function handleSave() {
     const name = recipeName.trim() || `${selectedWax?.name || 'Candle'} ×${vesselCount}`
-    saveCandleRecipe({
+    const { recipe, write, overwritten } = saveCandleRecipe({
+      id: activeRecipeId || undefined,
       name,
       waxId,
       vesselCount: parseInt(vesselCount, 10) || 1,
@@ -141,10 +153,16 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
       unit,
       vesselDiameterIn: parseFloat(vesselDiameterIn) || 0,
       vesselPresetId,
+      notes: recipeNotes.trim() || undefined,
     })
-    setRecipeName(name)
+    if (!write.ok) {
+      onToast?.(write.error)
+      return
+    }
+    setActiveRecipeId(recipe.id)
+    setRecipeName(recipe.name)
     refreshSaved()
-    onToast?.(`Saved “${name}”`)
+    onToast?.(overwritten ? `Updated “${recipe.name}”` : `Saved “${recipe.name}”`)
   }
 
   function loadRecipe(r: SavedCandleRecipe) {
@@ -159,18 +177,26 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
     setVesselDiameterIn(String(r.vesselDiameterIn))
     setVesselPresetId(r.vesselPresetId || 'custom')
     setRecipeName(r.name)
+    setRecipeNotes(r.notes || '')
+    setActiveRecipeId(r.id)
     setShowSaved(false)
     onToast?.(`Loaded “${r.name}”`)
   }
 
   function handleDelete(id: string) {
-    deleteCandleRecipe(id)
+    const write = deleteCandleRecipe(id)
+    if (!write.ok) {
+      onToast?.(write.error)
+      return
+    }
+    if (activeRecipeId === id) setActiveRecipeId(null)
     refreshSaved()
     onToast?.('Recipe deleted')
   }
 
   const currentCandleRecipe = useCallback((): SavedCandleRecipe => {
     return currentCandleSnapshot({
+      id: activeRecipeId || undefined,
       name: recipeName.trim() || `${selectedWax?.name || 'Candle'} ×${vesselCount}`,
       waxId,
       vesselCount: parseInt(vesselCount, 10) || 1,
@@ -182,8 +208,10 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
       unit,
       vesselDiameterIn: parseFloat(vesselDiameterIn) || 0,
       vesselPresetId,
+      notes: recipeNotes.trim() || undefined,
     })
   }, [
+    activeRecipeId,
     recipeName,
     selectedWax?.name,
     vesselCount,
@@ -196,15 +224,18 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
     unit,
     vesselDiameterIn,
     vesselPresetId,
+    recipeNotes,
   ])
 
-  async function handleCopy() {
+  const formatRecipeText = useCallback(() => {
     const lines = [
       `Alex's Craft Calc — Candle`,
       recipeName ? `Name: ${recipeName}` : null,
       `Wax: ${selectedWax?.name || waxId}`,
       `Vessels: ${vesselCount}`,
-      useTotalWax ? `Total wax: ${result.totalWax} ${unit}` : `Wax / vessel: ${result.perVessel.wax} ${unit}`,
+      useTotalWax
+        ? `Total wax: ${result.totalWax} ${unit}`
+        : `Wax / vessel: ${result.perVessel.wax} ${unit}`,
       `FO load: ${fragrancePct}% → ${result.fragrance} ${unit} total`,
       `FO / vessel: ${result.perVessel.fragrance} ${unit}`,
       `Batch total: ${result.totalBatch} ${unit}`,
@@ -213,13 +244,50 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
       `Wick: ${result.wickHint}`,
       result.pourHint ? `Pour: ${result.pourHint}` : null,
       result.warnings.length ? `Warnings: ${result.warnings.join(' | ')}` : null,
+      recipeNotes.trim() ? `Notes:\n${recipeNotes.trim()}` : null,
     ].filter(Boolean)
-    const ok = await copyText(lines.join('\n'))
+    return lines.join('\n')
+  }, [
+    recipeName,
+    selectedWax?.name,
+    waxId,
+    vesselCount,
+    useTotalWax,
+    result,
+    unit,
+    fragrancePct,
+    vesselDiameterIn,
+    recipeNotes,
+  ])
+
+  async function handleCopy() {
+    const ok = await copyText(formatRecipeText())
     onToast?.(ok ? 'Results copied' : 'Copy failed')
   }
 
   function handlePrint() {
-    window.print()
+    const w = window.open('', '_blank', 'noopener,noreferrer,width=720,height=900')
+    if (!w) {
+      onToast?.('Pop-up blocked — allow pop-ups to print')
+      return
+    }
+    const html =
+      '<!doctype html><html><head><title>Candle Recipe</title>' +
+      '<style>' +
+      'body{font-family:Segoe UI,system-ui,sans-serif;padding:2rem;color:#1a0a2e;line-height:1.5}' +
+      'h1{color:#6b21a8;font-size:1.4rem}' +
+      'pre{white-space:pre-wrap;background:#f5e9ff;padding:1rem;border-radius:12px}' +
+      '.note{font-size:0.85rem;color:#666;margin-top:1.5rem}' +
+      '</style></head><body>' +
+      "<h1>Alex's Craft Calc — Candle</h1>" +
+      '<pre>' +
+      formatRecipeText().replace(/</g, '&lt;') +
+      '</pre>' +
+      '<p class="note">Craft planning only. Verify FO limits and wick with test burns.</p>' +
+      '<script>onload=()=>{print();}</script>' +
+      '</body></html>'
+    w.document.write(html)
+    w.document.close()
   }
 
   function handleExportCurrent() {
@@ -242,31 +310,28 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
   async function handleImportFile(file: File | null) {
     if (!file) return
     try {
-      const text = await file.text()
+      const text = await readFileAsText(file)
       const parsed = importRecipesFromText(text)
       if (!parsed.ok) {
         onToast?.(parsed.error)
         return
       }
+      // Merge first so editor binds to the stable library id (not the throwaway parse id).
+      const merged = mergeImportedRecipes(parsed)
+      refreshSaved()
+      if (!merged.write.ok) {
+        onToast?.(merged.write.error)
+        return
+      }
       if (
-        parsed.candle?.[0] &&
+        merged.lastCandle &&
         parsed.kind === 'candle' &&
         parsed.candleCount === 1 &&
         parsed.soapCount === 0
       ) {
-        loadRecipe(parsed.candle[0])
+        loadRecipe(merged.lastCandle)
       }
-      const merged = mergeImportedRecipes(parsed)
-      refreshSaved()
-      const parts = [
-        merged.soapSaved ? `${merged.soapSaved} soap` : null,
-        merged.candleSaved ? `${merged.candleSaved} candle` : null,
-      ].filter(Boolean)
-      onToast?.(
-        parts.length
-          ? `Imported ${parts.join(' + ')} recipe${merged.soapSaved + merged.candleSaved === 1 ? '' : 's'}`
-          : 'Nothing new to import',
-      )
+      onToast?.(formatImportSummary(merged))
     } catch {
       onToast?.('Could not read that file')
     } finally {
@@ -323,12 +388,12 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
               placeholder="e.g. Lavender 8oz soy run"
               value={recipeName}
               onChange={(e) => setRecipeName(e.target.value)}
-              maxLength={80}
+              maxLength={120}
             />
           </label>
           <div className="recipe-actions">
             <button type="button" className="chip solid" onClick={handleSave}>
-              Save
+              {activeRecipeId ? 'Update' : 'Save'}
             </button>
             <button type="button" className="chip" onClick={() => setShowSaved((v) => !v)}>
               {showSaved ? 'Hide saved' : `Saved (${saved.length})`}
@@ -362,22 +427,43 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
           <input
             ref={importRef}
             type="file"
-            accept=".json,.acc.json,application/json,text/plain"
+            accept={RECIPE_FILE_ACCEPT}
             className="sr-only"
             aria-label="Import recipe file"
             onChange={(e) => handleImportFile(e.target.files?.[0] ?? null)}
           />
         </div>
+        <label className="notes-field">
+          Custom recipe notes
+          <textarea
+            rows={3}
+            maxLength={4000}
+            placeholder="Batch notes, FO blend, dye, wick size, cure log, customer order…"
+            value={recipeNotes}
+            onChange={(e) => setRecipeNotes(e.target.value)}
+          />
+        </label>
+        {activeRecipeId && (
+          <p className="hint recipe-slot-hint">
+            Editing saved recipe — Save updates this library slot (or rename to keep both).
+          </p>
+        )}
         {showSaved && (
           <div className="saved-list">
             {saved.length === 0 && <p className="hint">No saved candle recipes yet.</p>}
             {saved.map((r) => (
-              <div key={r.id} className="saved-item">
+              <div
+                key={r.id}
+                className={'saved-item' + (r.id === activeRecipeId ? ' active' : '')}
+                aria-current={r.id === activeRecipeId ? 'true' : undefined}
+              >
                 <button type="button" className="saved-load" onClick={() => loadRecipe(r)}>
                   <strong>{r.name}</strong>
                   <span>
                     {getWax(r.waxId)?.name || r.waxId} · {r.vesselCount} vessels · {r.fragrancePct}% FO
+                    {formatSavedAt(r.savedAt) ? ` · ${formatSavedAt(r.savedAt)}` : ''}
                   </span>
+                  {r.notes ? <span className="notes-chip">notes</span> : null}
                 </button>
                 <button
                   type="button"

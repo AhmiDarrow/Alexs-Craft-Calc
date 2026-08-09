@@ -4,6 +4,28 @@ All notable changes to **Alex's Craft Calc** are documented here.
 
 ## [Unreleased]
 
+## [1.0.4] — 2026-08-09
+
+### Fixed
+- **Import → Save** no longer creates a duplicate library slot (single-file import keeps the stable recipe id)
+- Soap **presets** clear the active library slot so Save creates a new recipe instead of overwriting the loaded one
+- Candle **Print** uses a clean batch sheet pop-up (parity with soap) and toasts if the popup is blocked
+- App mode preference read/write is safer when `localStorage` is restricted
+
+### Improved
+- Save/load polish (soap + candle): notes chip on saved rows, active-slot styling, clearer recipe-slot hints, import summary toasts, write-error handling
+- Toast tones (ok / warn / err) with longer dwell for long messages
+- Mode toggle ↔ calculator tabpanel accessibility wiring
+- Focus-visible styles on saved-load controls
+- Candle recipe name `maxLength` 120 (parity with soap)
+
+### Changed
+- Soap oils: **weight and % both always editable** against a fixed **Total oils ceiling**
+- Typing one oil’s weight or % updates **only that oil** — other oils and the ceiling are never auto-rewritten
+- Results unlock when oil % = 100% **and** oil weights sum to Total oils
+- Removed By weight / By % mode toggle (dual entry is the default)
+- Optional **Scale weights to total** and **Apply % to weights** helpers
+
 ## [1.0.3] — 2026-07-31
 
 ### Changed

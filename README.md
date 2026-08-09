@@ -10,18 +10,20 @@ Press **F1** anytime for the full **Craft Wiki** — app help plus a real encycl
 
 ### Soap calculator
 - 30 oils/butters with industry-standard NaOH SAP values + craft encyclopedia blurbs
-- **Weight of oils:** unit tabs **g · oz · lb** (default **oz**) + dedicated **Total oils weight**
-- Entry modes: **By weight** (live %) or **By %** (weights from total; lye locked until % = 100)
+- **Weight of oils:** unit tabs **g · oz · lb** (default **oz**) + dedicated **Total oils ceiling**
+- **Dual entry:** weight **and** % always editable per oil — edit one oil only; others stay put
+- Total oils is the recipe ceiling (never auto-rewritten when you type oil weights)
+- Results unlock when oil % = 100% **and** weights sum to Total oils
+- Helpers: Scale weights to total · Apply % to weights
 - NaOH (bar) or KOH (liquid) — KOH = NaOH × 1.4027
 - Superfat % with live lye adjustment
 - Water methods: % of oils · lye concentration · water discount
 - Fragrance % of oils
 - Weighted iodine & INS + hardness body hint
 - Presets: **Custom** (blank — no oils) · Castile-ish · Everyday Bar · Creamy Shea · Palm-free · Luxury Butter
-- Scale oils to the total-oils field
 - **Custom recipe notes** field (saved with the recipe)
 - Save / load / delete recipes (local)
-- **Export · Import · Export all** (portable JSON — includes mode, total, notes)
+- **Export · Import · Export all** (portable JSON — includes total ceiling, notes)
 - Copy recipe · Print batch sheet
 - Per-oil wiki deep-links (ⓘ)
 
@@ -145,4 +147,4 @@ START.bat               One-click web launcher
 Alien Purple — void blacks, amethyst gradients, neon violet accents.
 
 ---
-Built for Ahmi · Alex's Craft Calc v1.1
+Built for Ahmi · Alex's Craft Calc v1.0.4

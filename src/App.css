@@ -875,6 +875,10 @@ label select:focus,
   align-items: stretch;
   gap: 0.35rem;
 }
+.saved-item.active {
+  /* Active ring is primarily styled in wiki-polish; keep a fallback here. */
+  outline: none;
+}
 .saved-load {
   flex: 1;
   text-align: left;
@@ -886,6 +890,7 @@ label select:focus,
   cursor: pointer;
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 0.15rem;
 }
 .saved-load:hover {
@@ -898,4 +903,27 @@ label select:focus,
 .saved-load span {
   font-size: 0.8rem;
   opacity: 0.75;
+}
+.notes-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.08rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--alien-hot);
+  background: rgba(168, 85, 247, 0.18);
+  border: 1px solid rgba(210, 150, 255, 0.28);
+}
+.recipe-slot-hint {
+  margin: 0.15rem 0 0;
+  padding: 0.45rem 0.65rem;
+  border-radius: 10px;
+  border: 1px dashed rgba(186, 120, 255, 0.28);
+  background: rgba(168, 85, 247, 0.08);
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
 }

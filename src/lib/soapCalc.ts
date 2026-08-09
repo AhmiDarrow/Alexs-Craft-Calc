@@ -3,7 +3,8 @@ import { KOH_FACTOR, getOil, type Oil } from '../data/oils'
 export type LyeType = 'naoh' | 'koh'
 export type WaterMethod = 'percent_oils' | 'lye_concentration' | 'discount'
 export type SoapUnit = 'g' | 'oz' | 'lb'
-export type OilEntryMode = 'weight' | 'percent'
+/** @deprecated Kept for saved-recipe compatibility; UI is always dual weight+% */
+export type OilEntryMode = 'weight' | 'percent' | 'dual'
 
 export interface OilLine {
   oilId: string
@@ -102,8 +103,36 @@ export function oilsFromPercents(
   }))
 }
 
-/** Derive percentages from oil weights (0 if total is 0). */
-export function percentsFromOils(lines: OilLine[]): { oilId: string; pct: number }[] {
+/**
+ * % of one oil relative to the recipe ceiling (Total oils weight).
+ * Does not look at other oils — the ceiling is the denominator.
+ */
+export function pctOfCeiling(amount: number, totalOils: number): number {
+  if (!(totalOils > 0) || !Number.isFinite(amount) || amount <= 0) return 0
+  return round((amount / totalOils) * 100, 4)
+}
+
+/** Weight of one oil from % of the recipe ceiling. */
+export function amountFromCeilingPct(pct: number, totalOils: number): number {
+  if (!(totalOils > 0) || !Number.isFinite(pct) || pct <= 0) return 0
+  return round(totalOils * (pct / 100), 4)
+}
+
+/**
+ * Derive display percentages from oil weights.
+ * When `ceiling` is set (>0), each % is weight/ceiling (recipe total is fixed).
+ * Otherwise falls back to share-of-sum (legacy).
+ */
+export function percentsFromOils(
+  lines: OilLine[],
+  ceiling?: number,
+): { oilId: string; pct: number }[] {
+  if (ceiling != null && ceiling > 0) {
+    return lines.map((l) => ({
+      oilId: l.oilId,
+      pct: pctOfCeiling(l.amount > 0 ? l.amount : 0, ceiling),
+    }))
+  }
   const total = lines.reduce((s, l) => s + (l.amount > 0 ? l.amount : 0), 0)
   if (!(total > 0)) {
     return lines.map((l) => ({ oilId: l.oilId, pct: 0 }))
@@ -112,6 +141,18 @@ export function percentsFromOils(lines: OilLine[]): { oilId: string; pct: number
     oilId: l.oilId,
     pct: round(((l.amount > 0 ? l.amount : 0) / total) * 100, 4),
   }))
+}
+
+/** True when the sum of oil weights matches the Total oils ceiling. */
+export function weightsMatchCeiling(
+  amounts: number[],
+  ceiling: number,
+  eps = PCT_TOTAL_EPS,
+): boolean {
+  if (!(ceiling > 0)) return false
+  const sum = amounts.reduce((s, a) => s + (Number.isFinite(a) && a > 0 ? a : 0), 0)
+  // Match within eps% of ceiling (same tolerance family as 100% lock).
+  return Math.abs(sum - ceiling) <= Math.max(ceiling * (eps / 100), 1e-6)
 }
 
 export function emptyLockedResult(warnings: string[]): SoapResult {

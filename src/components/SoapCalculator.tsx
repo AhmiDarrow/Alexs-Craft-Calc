@@ -1,16 +1,18 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { OILS, getOil } from '../data/oils'
 import {
+  amountFromCeilingPct,
   calculateSoap,
   convertWeight,
   defaultSoapInput,
   emptyLockedResult,
   isPercentTotalLocked,
   oilsFromPercents,
+  pctOfCeiling,
   percentsFromOils,
   sumOilPercents,
+  weightsMatchCeiling,
   type LyeType,
-  type OilEntryMode,
   type OilLine,
   type SoapInput,
   type SoapUnit,
@@ -23,9 +25,13 @@ import {
   downloadSharePack,
   exportLibraryPack,
   exportSoapPack,
+  formatImportSummary,
+  formatSavedAt,
   importRecipesFromText,
   listSoapRecipes,
   mergeImportedRecipes,
+  RECIPE_FILE_ACCEPT,
+  readFileAsText,
   saveSoapRecipe,
   type SavedSoapRecipe,
 } from '../lib/storage'
@@ -94,13 +100,28 @@ function fmtNum(n: number, places = 2): string {
   return String(r)
 }
 
-function rowsFromWeightOils(oils: OilLine[]): OilRow[] {
-  const pcts = percentsFromOils(oils)
+/** Build rows from weights against a fixed Total oils ceiling (not share-of-sum). */
+function rowsFromWeightOils(oils: OilLine[], ceiling: number): OilRow[] {
+  const pcts = percentsFromOils(oils, ceiling > 0 ? ceiling : undefined)
   return oils.map((o, i) => ({
     key: uid(),
     oilId: o.oilId,
     amount: String(o.amount),
     pct: fmtNum(pcts[i]?.pct ?? 0, 2),
+  }))
+}
+
+/** Build rows from % of a fixed Total oils ceiling. */
+function rowsFromPercentOils(
+  lines: { oilId: string; pct: number }[],
+  ceiling: number,
+): OilRow[] {
+  const oils = oilsFromPercents(ceiling, lines)
+  return oils.map((o, i) => ({
+    key: uid(),
+    oilId: o.oilId,
+    amount: fmtNum(o.amount, 4),
+    pct: fmtNum(lines[i]?.pct ?? 0, 2),
   }))
 }
 
@@ -117,7 +138,10 @@ interface SoapCalculatorProps {
 
 export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
   const defaults = defaultSoapInput()
-  const [rows, setRows] = useState<OilRow[]>(() => rowsFromWeightOils(defaults.oils))
+  const defaultCeiling = defaults.oils.reduce((s, o) => s + o.amount, 0)
+  const [rows, setRows] = useState<OilRow[]>(() =>
+    rowsFromWeightOils(defaults.oils, defaultCeiling),
+  )
   const [lyeType, setLyeType] = useState<LyeType>('naoh')
   const [superfatPct, setSuperfatPct] = useState('5')
   const [waterMethod, setWaterMethod] = useState<WaterMethod>('percent_oils')
@@ -126,14 +150,12 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
   const [waterDiscountPct, setWaterDiscountPct] = useState('0')
   const [fragrancePct, setFragrancePct] = useState('3')
   const [unit, setUnit] = useState<SoapUnit>('oz')
-  const [oilEntryMode, setOilEntryMode] = useState<OilEntryMode>('weight')
-  const [totalOilsWeight, setTotalOilsWeight] = useState(() => {
-    const d = defaultSoapInput()
-    const total = d.oils.reduce((s, o) => s + o.amount, 0)
-    return fmtNum(total, 4)
-  })
+  /** Fixed recipe ceiling — never auto-rewritten when oils change. */
+  const [totalOilsWeight, setTotalOilsWeight] = useState(() => fmtNum(defaultCeiling, 4))
   const [recipeName, setRecipeName] = useState('')
   const [recipeNotes, setRecipeNotes] = useState('')
+  /** Stable library slot while editing a loaded/saved recipe (enables overwrite-by-id). */
+  const [activeRecipeId, setActiveRecipeId] = useState<string | null>(null)
   const [saved, setSaved] = useState<SavedSoapRecipe[]>(() => listSoapRecipes())
   const [showSaved, setShowSaved] = useState(false)
   const importRef = useRef<HTMLInputElement>(null)
@@ -142,27 +164,39 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
 
   const parsedTotalOils = parseFloat(totalOilsWeight) || 0
 
+  const weightSum = useMemo(
+    () =>
+      rows.reduce((s, r) => {
+        if (!r.oilId) return s
+        const a = parseFloat(r.amount)
+        return s + (Number.isFinite(a) && a > 0 ? a : 0)
+      }, 0),
+    [rows],
+  )
+
   const pctSum = useMemo(
-    () => sumOilPercents(rows.map((r) => parseFloat(r.pct) || 0)),
+    () => sumOilPercents(rows.filter((r) => r.oilId).map((r) => parseFloat(r.pct) || 0)),
     [rows],
   )
   const pctOk = isPercentTotalLocked(pctSum)
   const pctDelta = Math.round((pctSum - 100) * 100) / 100
+  const weightsOk =
+    parsedTotalOils > 0 &&
+    weightsMatchCeiling(
+      rows.filter((r) => r.oilId).map((r) => parseFloat(r.amount) || 0),
+      parsedTotalOils,
+    )
+  const weightDelta = Math.round((weightSum - parsedTotalOils) * 10000) / 10000
 
+  /** Always use typed oil weights for lye math — ceiling only gates unlock. */
   const resolvedOils: OilLine[] = useMemo(() => {
-    const picked = rows.filter((r) => r.oilId)
-    if (oilEntryMode === 'percent') {
-      if (!(parsedTotalOils > 0) || !pctOk) return []
-      return oilsFromPercents(
-        parsedTotalOils,
-        picked.map((r) => ({ oilId: r.oilId, pct: parseFloat(r.pct) || 0 })),
-      )
-    }
-    return picked.map((r) => ({
-      oilId: r.oilId,
-      amount: parseFloat(r.amount) || 0,
-    }))
-  }, [oilEntryMode, parsedTotalOils, pctOk, rows])
+    return rows
+      .filter((r) => r.oilId)
+      .map((r) => ({
+        oilId: r.oilId,
+        amount: parseFloat(r.amount) || 0,
+      }))
+  }, [rows])
 
   const input: SoapInput = useMemo(
     () => ({
@@ -190,103 +224,104 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
   )
 
   const lockWarnings = useMemo(() => {
-    if (oilEntryMode !== 'percent') return [] as string[]
     const w: string[] = []
     if (!(parsedTotalOils > 0)) {
-      w.push('Enter a Total oils weight before lye math can run in % mode.')
+      w.push('Enter a Total oils weight — that is the recipe ceiling.')
     }
     if (!pctOk) {
       w.push(
         pctSum === 0
-          ? 'Enter oil percentages that total 100%.'
-          : 'Oil percentages must total 100% before results unlock (currently ' +
+          ? 'Enter oil weights or percentages that total 100% of Total oils.'
+          : 'Oil percentages must total 100% of Total oils before results unlock (currently ' +
               fmtNum(pctSum, 2) +
               '%).',
       )
+    } else if (!weightsOk) {
+      w.push(
+        'Oil weights must add up to Total oils (' +
+          fmtNum(parsedTotalOils, 4) +
+          ' ' +
+          u +
+          ') — currently ' +
+          fmtNum(weightSum, 4) +
+          ' ' +
+          u +
+          '.',
+      )
     }
     return w
-  }, [oilEntryMode, parsedTotalOils, pctOk, pctSum])
+  }, [parsedTotalOils, pctOk, pctSum, weightsOk, weightSum, u])
 
   const result = useMemo(() => {
-    if (oilEntryMode === 'percent' && lockWarnings.length > 0) {
+    if (lockWarnings.length > 0) {
       return emptyLockedResult(lockWarnings)
     }
     return calculateSoap(input)
-  }, [oilEntryMode, lockWarnings, input])
+  }, [lockWarnings, input])
 
-  const displayWeightTotal =
-    oilEntryMode === 'weight'
-      ? result.totalOils
-      : parsedTotalOils > 0
-        ? parsedTotalOils
-        : 0
-
-  function syncPctFromAmounts(nextRows: OilRow[]): OilRow[] {
-    const oils = nextRows.map((r) => ({
-      oilId: r.oilId,
-      amount: parseFloat(r.amount) || 0,
-    }))
-    const pcts = percentsFromOils(oils)
-    return nextRows.map((r, i) => ({
-      ...r,
-      pct: fmtNum(pcts[i]?.pct ?? 0, 2),
-    }))
-  }
-
-  function syncAmountsFromPct(nextRows: OilRow[], total: number): OilRow[] {
-    if (!(total > 0)) {
-      return nextRows.map((r) => ({ ...r, amount: '0' }))
-    }
-    const oils = oilsFromPercents(
-      total,
-      nextRows.map((r) => ({ oilId: r.oilId, pct: parseFloat(r.pct) || 0 })),
+  /**
+   * Edit weight → recompute only that row's % from ceiling.
+   * Never touches other oils or Total oils.
+   */
+  function updateRowWeight(key: string, amountStr: string) {
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.key !== key) return r
+        const amount = parseFloat(amountStr)
+        const pct =
+          parsedTotalOils > 0 && Number.isFinite(amount)
+            ? pctOfCeiling(amount > 0 ? amount : 0, parsedTotalOils)
+            : 0
+        return {
+          ...r,
+          amount: amountStr,
+          pct: fmtNum(pct, 2),
+        }
+      }),
     )
-    return nextRows.map((r, i) => ({
-      ...r,
-      amount: fmtNum(oils[i]?.amount ?? 0, 4),
-    }))
   }
 
-  function updateRow(key: string, patch: Partial<OilRow>) {
-    setRows((prev) => {
-      let next = prev.map((r) => (r.key === key ? { ...r, ...patch } : r))
-      if (oilEntryMode === 'weight' && patch.amount !== undefined) {
-        next = syncPctFromAmounts(next)
-        const total = next.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0)
-        setTotalOilsWeight(total > 0 ? fmtNum(total, 4) : totalOilsWeight)
-      } else if (oilEntryMode === 'percent' && patch.pct !== undefined) {
-        next = syncAmountsFromPct(next, parsedTotalOils)
-      } else if (patch.oilId !== undefined) {
-        // oil change only
-      }
-      return next
-    })
+  /**
+   * Edit % → recompute only that row's weight from ceiling.
+   * Never touches other oils or Total oils.
+   */
+  function updateRowPct(key: string, pctStr: string) {
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.key !== key) return r
+        const pct = parseFloat(pctStr)
+        const amount =
+          parsedTotalOils > 0 && Number.isFinite(pct)
+            ? amountFromCeilingPct(pct > 0 ? pct : 0, parsedTotalOils)
+            : 0
+        return {
+          ...r,
+          pct: pctStr,
+          amount: fmtNum(amount, 4),
+        }
+      }),
+    )
+  }
+
+  function updateRowOil(key: string, oilId: string) {
+    setRows((prev) => prev.map((r) => (r.key === key ? { ...r, oilId } : r)))
   }
 
   function addRow() {
-    setRows((prev) => {
-      const row: OilRow = {
+    setRows((prev) => [
+      ...prev,
+      {
         key: uid(),
         oilId: '',
         amount: '0',
         pct: '0',
-      }
-      const next = [...prev, row]
-      return oilEntryMode === 'weight' ? syncPctFromAmounts(next) : next
-    })
+      },
+    ])
   }
 
   function removeRow(key: string) {
-    setRows((prev) => {
-      const next = prev.filter((r) => r.key !== key)
-      if (oilEntryMode === 'weight') {
-        const synced = syncPctFromAmounts(next)
-        const total = synced.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0)
-        if (total > 0) setTotalOilsWeight(fmtNum(total, 4))
-        return synced
-      }
-      return syncAmountsFromPct(next, parsedTotalOils)
-    })
+    // Removing a row does not rewrite remaining oils or the ceiling.
+    setRows((prev) => prev.filter((r) => r.key !== key))
   }
 
   function applyPreset(oils: OilLine[], name?: string) {
@@ -295,21 +330,18 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
       oilId: o.oilId,
       amount: convertWeight(o.amount, 'g', unit),
     }))
-    const next = rowsFromWeightOils(converted)
-    setRows(next)
     const total = converted.reduce((s, o) => s + o.amount, 0)
     setTotalOilsWeight(fmtNum(total, 4))
+    setRows(rowsFromWeightOils(converted, total))
     if (name) setRecipeName(name)
-    if (oilEntryMode === 'percent') {
-      // keep % mode; amounts already derived from weights→pcts
-      setRows(syncAmountsFromPct(next, total))
-    }
+    // Preset is a new working copy — don't overwrite a previously loaded library slot.
+    setActiveRecipeId(null)
     onToast?.(name ? name + ' loaded' : 'Preset loaded')
   }
 
   /**
    * True blank formula: no preset oils/butters preloaded.
-   * Keeps unit, lye, water method, and total oils weight.
+   * Keeps unit, lye, water method, and total oils ceiling.
    */
   function startCustomRecipe() {
     const total =
@@ -318,59 +350,68 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
     setTotalOilsWeight(fmtNum(total, 4))
     setRecipeName('Custom')
     setRecipeNotes('')
+    setActiveRecipeId(null)
     setShowSaved(false)
-    onToast?.('Custom — empty recipe. Add oils and set weights or %')
+    onToast?.('Custom — empty recipe. Add oils; Total oils is the ceiling')
   }
 
-  function setEntryMode(mode: OilEntryMode) {
-    if (mode === oilEntryMode) return
-    if (mode === 'percent') {
-      // Capture current weight total into dedicated field, keep % from weights
-      const total =
-        rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0) ||
-        parsedTotalOils ||
-        1000
-      const withPct = syncPctFromAmounts(rows)
-      setTotalOilsWeight(fmtNum(total, 4))
-      setRows(syncAmountsFromPct(withPct, total))
-      setOilEntryMode('percent')
-      onToast?.('Enter by % — oils must total 100%')
-    } else {
-      // Switch to weight: keep current amounts (from last good % or typed weights)
-      let next = rows
-      if (parsedTotalOils > 0 && pctOk) {
-        next = syncAmountsFromPct(rows, parsedTotalOils)
-      }
-      next = syncPctFromAmounts(next)
-      const total = next.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0)
-      if (total > 0) setTotalOilsWeight(fmtNum(total, 4))
-      setRows(next)
-      setOilEntryMode('weight')
-      onToast?.('Enter by weight')
-    }
-  }
-
+  /**
+   * User is changing the ceiling. Keep each oil's % of the old recipe and
+   * recompute weights for the new total — only when they explicitly edit Total oils.
+   * (Does not run when typing individual oil weights.)
+   */
   function onTotalOilsChange(value: string) {
+    const prevCeiling = parsedTotalOils
+    const nextCeiling = parseFloat(value) || 0
     setTotalOilsWeight(value)
-    const total = parseFloat(value) || 0
-    if (oilEntryMode === 'percent' && total > 0) {
-      setRows((prev) => syncAmountsFromPct(prev, total))
-    }
+    if (!(nextCeiling > 0)) return
+    setRows((prev) =>
+      prev.map((r) => {
+        const pct = parseFloat(r.pct)
+        // Prefer stored % (stable across ceiling edits). Fall back to old weight/ceiling.
+        let usePct = Number.isFinite(pct) ? pct : 0
+        if (!(usePct > 0) && prevCeiling > 0) {
+          const amt = parseFloat(r.amount) || 0
+          usePct = pctOfCeiling(amt, prevCeiling)
+        }
+        return {
+          ...r,
+          pct: fmtNum(usePct, 2),
+          amount: fmtNum(amountFromCeilingPct(usePct > 0 ? usePct : 0, nextCeiling), 4),
+        }
+      }),
+    )
   }
 
-  function applyTotalAsScale() {
+  /** Optional: force every weight = % × ceiling (same as re-applying current %). */
+  function applyPercentsToCeiling() {
     const target = parseFloat(totalOilsWeight)
     if (!target || target <= 0) {
       onToast?.('Enter a Total oils weight first')
       return
     }
-    if (oilEntryMode === 'percent') {
-      if (!pctOk) {
-        onToast?.('Oil % must total 100% before applying total')
-        return
-      }
-      setRows((prev) => syncAmountsFromPct(prev, target))
-      onToast?.('Weights updated from % × total')
+    if (!pctOk) {
+      onToast?.('Oil % must total 100% before applying')
+      return
+    }
+    setRows((prev) =>
+      prev.map((r) => {
+        const pct = parseFloat(r.pct) || 0
+        return {
+          ...r,
+          amount: fmtNum(amountFromCeilingPct(pct, target), 4),
+          pct: fmtNum(pct, 2),
+        }
+      }),
+    )
+    onToast?.('Weights set from % × Total oils')
+  }
+
+  /** Optional: scale current weights so they sum exactly to the ceiling (keeps ratios). */
+  function scaleWeightsToCeiling() {
+    const target = parseFloat(totalOilsWeight)
+    if (!target || target <= 0) {
+      onToast?.('Enter a Total oils weight first')
       return
     }
     const current = rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0)
@@ -380,18 +421,21 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
     }
     const factor = target / current
     setRows((prev) =>
-      syncPctFromAmounts(
-        prev.map((r) => ({
+      prev.map((r) => {
+        const amount = (parseFloat(r.amount) || 0) * factor
+        return {
           ...r,
-          amount: fmtNum((parseFloat(r.amount) || 0) * factor, 4),
-        })),
-      ),
+          amount: fmtNum(amount, 4),
+          pct: fmtNum(pctOfCeiling(amount, target), 2),
+        }
+      }),
     )
-    onToast?.('Scaled oils to ' + target + ' ' + u)
+    onToast?.('Scaled oils to Total oils (' + fmtNum(target, 4) + ' ' + u + ')')
   }
 
   function resetDefaults() {
     const d = defaultSoapInput()
+    const total = d.oils.reduce((s, o) => s + o.amount, 0)
     setLyeType(d.lyeType)
     setSuperfatPct(String(d.superfatPct))
     setWaterMethod(d.waterMethod)
@@ -400,54 +444,52 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
     setWaterDiscountPct(String(d.waterDiscountPct))
     setFragrancePct(String(d.fragrancePct))
     setUnit(d.unit)
-    setOilEntryMode('weight')
-    setRows(rowsFromWeightOils(d.oils))
-    const total = d.oils.reduce((s, o) => s + o.amount, 0)
     setTotalOilsWeight(fmtNum(total, 4))
+    setRows(rowsFromWeightOils(d.oils, total))
     setRecipeName('')
     setRecipeNotes('')
+    setActiveRecipeId(null)
     onToast?.('Soap calculator reset')
   }
 
   function onUnitChange(next: SoapUnit) {
     if (next === unit) return
+    const st = parseFloat(totalOilsWeight)
+    const nextCeiling =
+      Number.isFinite(st) && st > 0 ? convertWeight(st, unit, next) : 0
     setRows((prev) =>
       prev.map((r) => {
         const n = parseFloat(r.amount)
         if (!Number.isFinite(n)) return r
-        return { ...r, amount: fmtNum(convertWeight(n, unit, next), 4) }
+        const amount = convertWeight(n, unit, next)
+        return {
+          ...r,
+          amount: fmtNum(amount, 4),
+          // % of ceiling is unit-invariant; recompute from converted mass for safety
+          pct: fmtNum(pctOfCeiling(amount, nextCeiling > 0 ? nextCeiling : 0), 2),
+        }
       }),
     )
-    const st = parseFloat(totalOilsWeight)
-    if (Number.isFinite(st) && st > 0) {
-      setTotalOilsWeight(fmtNum(convertWeight(st, unit, next), 4))
+    if (nextCeiling > 0) {
+      setTotalOilsWeight(fmtNum(nextCeiling, 4))
     }
     setUnit(next)
   }
 
   function snapshotOils() {
-    const picked = rows.filter((r) => r.oilId)
-    if (oilEntryMode === 'percent') {
-      const oils = oilsFromPercents(
-        parsedTotalOils > 0 ? parsedTotalOils : 0,
-        picked.map((r) => ({ oilId: r.oilId, pct: parseFloat(r.pct) || 0 })),
-      )
-      return oils.map((o, i) => ({
-        oilId: o.oilId,
-        amount: o.amount,
-        pct: parseFloat(picked[i]?.pct) || 0,
+    return rows
+      .filter((r) => r.oilId)
+      .map((r) => ({
+        oilId: r.oilId,
+        amount: parseFloat(r.amount) || 0,
+        pct: parseFloat(r.pct) || 0,
       }))
-    }
-    return picked.map((r) => ({
-      oilId: r.oilId,
-      amount: parseFloat(r.amount) || 0,
-      pct: parseFloat(r.pct) || 0,
-    }))
   }
 
   function handleSave() {
     const name = recipeName.trim() || 'Soap ' + new Date().toLocaleDateString()
-    saveSoapRecipe({
+    const { recipe, write, overwritten } = saveSoapRecipe({
+      id: activeRecipeId || undefined,
       name,
       oils: snapshotOils(),
       lyeType,
@@ -458,40 +500,73 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
       waterDiscountPct: parseFloat(waterDiscountPct) || 0,
       fragrancePct: parseFloat(fragrancePct) || 0,
       unit,
-      oilEntryMode,
+      oilEntryMode: 'dual',
       totalOilsWeight: parsedTotalOils > 0 ? parsedTotalOils : undefined,
       notes: recipeNotes.trim() || undefined,
     })
+    if (!write.ok) {
+      onToast?.(write.error)
+      return
+    }
+    setActiveRecipeId(recipe.id)
+    setRecipeName(recipe.name)
     setSaved(listSoapRecipes())
-    setRecipeName(name)
-    onToast?.('Saved “' + name + '”')
+    onToast?.(overwritten ? `Updated “${recipe.name}”` : `Saved “${recipe.name}”`)
   }
 
   function loadRecipe(r: SavedSoapRecipe) {
-    const mode: OilEntryMode = r.oilEntryMode === 'percent' ? 'percent' : 'weight'
     const nextUnit: SoapUnit =
       r.unit === 'g' || r.unit === 'lb' || r.unit === 'oz' ? r.unit : 'oz'
-    let nextRows: OilRow[] = r.oils.map((o) => ({
-      key: uid(),
-      oilId: o.oilId,
-      amount: String(o.amount),
-      pct: o.pct != null ? fmtNum(o.pct, 2) : '0',
-    }))
-    if (mode === 'weight') {
-      nextRows = syncPctFromAmounts(nextRows)
-    } else if (nextRows.every((row) => !(parseFloat(row.pct) > 0))) {
-      nextRows = syncPctFromAmounts(nextRows)
-    }
     const totalFromRecipe =
       r.totalOilsWeight != null && r.totalOilsWeight > 0
         ? r.totalOilsWeight
-        : nextRows.reduce((s, row) => s + (parseFloat(row.amount) || 0), 0)
-    setTotalOilsWeight(totalFromRecipe > 0 ? fmtNum(totalFromRecipe, 4) : '1000')
-    if (mode === 'percent' && totalFromRecipe > 0) {
-      nextRows = syncAmountsFromPct(nextRows, totalFromRecipe)
+        : r.oils.reduce((s, o) => s + (o.amount > 0 ? o.amount : 0), 0)
+
+    // Prefer saved % of ceiling when present; else derive from weights ÷ ceiling.
+    // Legacy "percent" packs may only have % — fill weights from ceiling.
+    const preferPct = r.oilEntryMode === 'percent'
+    let nextRows: OilRow[]
+    if (preferPct && totalFromRecipe > 0) {
+      const lines = r.oils.map((o) => ({
+        oilId: o.oilId,
+        pct: o.pct != null && o.pct > 0 ? o.pct : pctOfCeiling(o.amount, totalFromRecipe),
+      }))
+      nextRows = rowsFromPercentOils(lines, totalFromRecipe)
+    } else {
+      nextRows = r.oils.map((o) => {
+        const amount = o.amount > 0 ? o.amount : 0
+        const pct =
+          o.pct != null && o.pct > 0
+            ? o.pct
+            : totalFromRecipe > 0
+              ? pctOfCeiling(amount, totalFromRecipe)
+              : 0
+        return {
+          key: uid(),
+          oilId: o.oilId,
+          amount: String(amount),
+          pct: fmtNum(pct, 2),
+        }
+      })
+      // If amounts were empty but % exist, materialize weights from ceiling.
+      if (
+        totalFromRecipe > 0 &&
+        nextRows.every((row) => !(parseFloat(row.amount) > 0)) &&
+        nextRows.some((row) => parseFloat(row.pct) > 0)
+      ) {
+        nextRows = rowsFromPercentOils(
+          nextRows.map((row) => ({ oilId: row.oilId, pct: parseFloat(row.pct) || 0 })),
+          totalFromRecipe,
+        )
+      }
     }
+
+    setTotalOilsWeight(
+      totalFromRecipe > 0
+        ? fmtNum(totalFromRecipe, 4)
+        : fmtNum(unit === 'lb' ? 2 : unit === 'oz' ? 32 : 1000, 4),
+    )
     setRows(nextRows)
-    setOilEntryMode(mode)
     setLyeType(r.lyeType)
     setSuperfatPct(String(r.superfatPct))
     setWaterMethod(r.waterMethod)
@@ -502,18 +577,25 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
     setUnit(nextUnit)
     setRecipeName(r.name)
     setRecipeNotes(r.notes || '')
+    setActiveRecipeId(r.id)
     setShowSaved(false)
-    onToast?.('Loaded “' + r.name + '”')
+    onToast?.(`Loaded “${r.name}”`)
   }
 
   function handleDelete(id: string) {
-    deleteSoapRecipe(id)
+    const write = deleteSoapRecipe(id)
+    if (!write.ok) {
+      onToast?.(write.error)
+      return
+    }
+    if (activeRecipeId === id) setActiveRecipeId(null)
     setSaved(listSoapRecipes())
     onToast?.('Recipe deleted')
   }
 
   const currentSoapRecipe = useCallback((): SavedSoapRecipe => {
     return currentSoapSnapshot({
+      id: activeRecipeId || undefined,
       name: recipeName.trim() || 'Soap ' + new Date().toLocaleDateString(),
       oils: snapshotOils(),
       lyeType,
@@ -524,12 +606,13 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
       waterDiscountPct: parseFloat(waterDiscountPct) || 0,
       fragrancePct: parseFloat(fragrancePct) || 0,
       unit,
-      oilEntryMode,
+      oilEntryMode: 'dual',
       totalOilsWeight: parsedTotalOils > 0 ? parsedTotalOils : undefined,
       notes: recipeNotes.trim() || undefined,
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    activeRecipeId,
     recipeName,
     rows,
     lyeType,
@@ -540,38 +623,50 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
     waterDiscountPct,
     fragrancePct,
     unit,
-    oilEntryMode,
     parsedTotalOils,
     recipeNotes,
   ])
 
   const formatRecipeText = useCallback(() => {
     const lyeName = lyeType === 'naoh' ? 'NaOH' : 'KOH'
-    const modeLabel = oilEntryMode === 'percent' ? 'by %' : 'by weight'
-    const oilLines =
-      oilEntryMode === 'percent'
-        ? rows
-            .filter((r) => r.oilId)
-            .map((r) => {
-              const oil = getOil(r.oilId)
-              const amt = parseFloat(r.amount) || 0
-              const pct = parseFloat(r.pct) || 0
-              return '  • ' + (oil?.name || r.oilId) + ': ' + pct + '% → ' + fmtNum(amt, 4) + ' ' + u
-            })
-        : result.oilBreakdown.map(
-            (b) => '  • ' + b.name + ': ' + b.amount + ' ' + u + ' (' + b.pct + '%)',
-          )
+    const oilLines = rows
+      .filter((r) => r.oilId)
+      .map((r) => {
+        const oil = getOil(r.oilId)
+        const amt = parseFloat(r.amount) || 0
+        const pct = parseFloat(r.pct) || 0
+        return (
+          '  • ' +
+          (oil?.name || r.oilId) +
+          ': ' +
+          fmtNum(amt, 4) +
+          ' ' +
+          u +
+          ' (' +
+          fmtNum(pct, 2) +
+          '%)'
+        )
+      })
     const lines = [
       "Alex's Craft Calc — Soap Recipe" + (recipeName ? ': ' + recipeName : ''),
-      'Unit: ' + u + ' · Entry: ' + modeLabel + ' · Lye: ' + lyeName + ' · Superfat: ' + superfatPct + '% · FO: ' + fragrancePct + '%',
+      'Unit: ' +
+        u +
+        ' · Lye: ' +
+        lyeName +
+        ' · Superfat: ' +
+        superfatPct +
+        '% · FO: ' +
+        fragrancePct +
+        '%',
       'Water method: ' + waterMethod,
-      'Total oils target: ' + (parsedTotalOils || result.totalOils) + ' ' + u,
+      'Total oils ceiling: ' + (parsedTotalOils || result.totalOils) + ' ' + u,
+      'Oil weight sum: ' + fmtNum(weightSum, 4) + ' ' + u + ' · Oil % sum: ' + fmtNum(pctSum, 2) + '%',
       '',
       'Oils:',
       ...oilLines,
       '',
       result.locked
-        ? 'Results locked — fix oil % total / total oils weight.'
+        ? 'Results locked — oil weights/% must match Total oils ceiling (100%).'
         : [
             'Total oils: ' + result.totalOils + ' ' + u,
             lyeName + ' (with SF): ' + result.lyeWithSuperfat + ' ' + u,
@@ -582,7 +677,9 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
             'Batch total: ' + result.totalBatch + ' ' + u,
             result.weightedIodine != null ? 'Weighted iodine: ' + result.weightedIodine : '',
             result.weightedIns != null ? 'Weighted INS: ' + result.weightedIns : '',
-          ].filter(Boolean).join('\n'),
+          ]
+            .filter(Boolean)
+            .join('\n'),
       recipeNotes.trim() ? '\nNotes:\n' + recipeNotes.trim() : '',
       '',
       'Always add lye to water. Wear PPE. Verify SAP with supplier COA.',
@@ -590,16 +687,16 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
     return lines.filter((x) => x !== '').join('\n')
   }, [
     recipeName,
-    unit,
     u,
     lyeType,
     superfatPct,
     fragrancePct,
     waterMethod,
     result,
-    oilEntryMode,
     rows,
     parsedTotalOils,
+    weightSum,
+    pctSum,
     recipeNotes,
   ])
 
@@ -634,48 +731,59 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
   }
 
   function handleExportCurrent() {
-    downloadSharePack(exportSoapPack(currentSoapRecipe()))
-    onToast?.('Exported soap recipe')
+    const recipe = currentSoapRecipe()
+    downloadSharePack(exportSoapPack(recipe))
+    onToast?.(`Exported “${recipe.name}” (.alex-soap.json)`)
   }
 
   function handleExportLibrary() {
-    downloadSharePack(exportLibraryPack())
-    onToast?.('Exported full recipe library')
+    const pack = exportLibraryPack()
+    const n = (pack.soap?.length || 0) + (pack.candle?.length || 0)
+    if (n === 0) {
+      onToast?.('No saved recipes to export')
+      return
+    }
+    downloadSharePack(pack)
+    onToast?.(`Exported library (${pack.soap?.length || 0} soap, ${pack.candle?.length || 0} candle)`)
   }
 
   async function handleImportFile(file: File | null) {
     if (!file) return
     try {
-      const text = await file.text()
+      const text = await readFileAsText(file)
       const parsed = importRecipesFromText(text)
       if (!parsed.ok) {
         onToast?.(parsed.error)
         return
       }
-      const { soapSaved, candleSaved } = mergeImportedRecipes(parsed)
+      // Merge first so editor binds to the stable library id (not the throwaway parse id).
+      const merged = mergeImportedRecipes(parsed)
       setSaved(listSoapRecipes())
-      if (parsed.kind === 'soap' && parsed.soap?.[0]) {
-        loadRecipe(parsed.soap[0])
+      if (!merged.write.ok) {
+        onToast?.(merged.write.error)
+        return
       }
-      onToast?.(
-        'Imported ' +
-          soapSaved +
-          ' soap + ' +
-          candleSaved +
-          ' candle recipe(s)',
-      )
+      if (
+        merged.lastSoap &&
+        parsed.kind === 'soap' &&
+        parsed.soapCount === 1 &&
+        parsed.candleCount === 0
+      ) {
+        loadRecipe(merged.lastSoap)
+      }
+      onToast?.(formatImportSummary(merged))
     } catch {
-      onToast?.('Import failed')
+      onToast?.('Could not read that file')
     } finally {
       if (importRef.current) importRef.current.value = ''
     }
   }
 
-  const pctStatusClass =
-    oilEntryMode === 'percent'
-      ? pctOk
-        ? 'pct-status ok'
-        : 'pct-status bad'
+  const recipeBalanced = pctOk && weightsOk && parsedTotalOils > 0
+  const pctStatusClass = recipeBalanced
+    ? 'pct-status ok'
+    : parsedTotalOils > 0
+      ? 'pct-status bad'
       : 'pct-status'
 
   return (
@@ -716,14 +824,15 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
               placeholder="e.g. Lavender everyday bar"
               value={recipeName}
               onChange={(e) => setRecipeName(e.target.value)}
+              maxLength={120}
             />
           </label>
           <div className="toolbar-btns">
             <button type="button" className="chip solid" onClick={handleSave}>
-              Save
+              {activeRecipeId ? 'Update' : 'Save'}
             </button>
             <button type="button" className="chip" onClick={() => setShowSaved((v) => !v)}>
-              Load ({saved.length})
+              {showSaved ? 'Hide saved' : `Saved (${saved.length})`}
             </button>
             <button type="button" className="chip" onClick={handleCopy} title="Copy batch text">
               Copy
@@ -754,7 +863,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
           <input
             ref={importRef}
             type="file"
-            accept=".json,.acc.json,application/json,text/plain"
+            accept={RECIPE_FILE_ACCEPT}
             className="sr-only"
             aria-label="Import recipe file"
             onChange={(e) => handleImportFile(e.target.files?.[0] ?? null)}
@@ -764,23 +873,34 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
           Custom recipe notes
           <textarea
             rows={3}
+            maxLength={4000}
             placeholder="Batch notes, scent blend, colorants, cure log, mold, customer order…"
             value={recipeNotes}
             onChange={(e) => setRecipeNotes(e.target.value)}
           />
         </label>
+        {activeRecipeId && (
+          <p className="hint recipe-slot-hint">
+            Editing saved recipe — Save updates this library slot (or rename to keep both).
+          </p>
+        )}
         {showSaved && (
           <div className="saved-list">
             {saved.length === 0 && <p className="hint">No saved soap recipes yet.</p>}
             {saved.map((r) => (
-              <div key={r.id} className="saved-item">
+              <div
+                key={r.id}
+                className={'saved-item' + (r.id === activeRecipeId ? ' active' : '')}
+                aria-current={r.id === activeRecipeId ? 'true' : undefined}
+              >
                 <button type="button" className="saved-load" onClick={() => loadRecipe(r)}>
                   <strong>{r.name}</strong>
                   <span>
-                    {r.oils.length} oils · {r.lyeType.toUpperCase()} ·{' '}
-                    {new Date(r.savedAt).toLocaleDateString()}
-                    {r.notes ? ' · notes' : ''}
+                    {r.oils.length} oils · {r.lyeType.toUpperCase()} · SF {r.superfatPct}%
+                    {r.totalOilsWeight != null ? ` · ${fmtNum(r.totalOilsWeight, 2)} ${r.unit}` : ''}
+                    {formatSavedAt(r.savedAt) ? ` · ${formatSavedAt(r.savedAt)}` : ''}
                   </span>
+                  {r.notes ? <span className="notes-chip">notes</span> : null}
                 </button>
                 <button
                   type="button"
@@ -796,25 +916,12 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
         )}
       </section>
 
-      <section className="card">
+      <section className="card weight-of-oils-card">
         <div className="card-title-row">
           <h3>Weight of oils</h3>
-          <div className="entry-mode-tabs" role="group" aria-label="Oil entry mode">
-            <button
-              type="button"
-              className={'unit-tab' + (oilEntryMode === 'weight' ? ' active' : '')}
-              onClick={() => setEntryMode('weight')}
-            >
-              By weight
-            </button>
-            <button
-              type="button"
-              className={'unit-tab' + (oilEntryMode === 'percent' ? ' active' : '')}
-              onClick={() => setEntryMode('percent')}
-            >
-              By %
-            </button>
-          </div>
+          <span className="ceiling-badge" title="Recipe ceiling — oils must add up to this">
+            Ceiling
+          </span>
         </div>
 
         <div className="total-oils-row">
@@ -830,12 +937,29 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
               placeholder={unit === 'lb' ? '2' : unit === 'oz' ? '32' : '1000'}
             />
           </label>
-          <button type="button" className="chip solid" onClick={applyTotalAsScale}>
-            {oilEntryMode === 'percent' ? 'Apply to weights' : 'Scale oils to total'}
-          </button>
+          <div className="total-oils-actions">
+            <button
+              type="button"
+              className="chip solid"
+              onClick={scaleWeightsToCeiling}
+              title="Scale current oil weights so they sum to Total oils (keeps ratios)"
+            >
+              Scale weights to total
+            </button>
+            <button
+              type="button"
+              className="chip"
+              onClick={applyPercentsToCeiling}
+              title="Set each oil weight from its % × Total oils"
+            >
+              Apply % to weights
+            </button>
+          </div>
           <p className="hint full">
-            Set the combined oil batch size here. In <strong>By %</strong> mode this total drives every oil weight.
-            In <strong>By weight</strong> mode, typing oils updates the live % column; use Scale to hit this total.
+            <strong>Total oils</strong> is the recipe ceiling — it does not change when you type individual oils.
+            Edit <strong>weight</strong> or <strong>%</strong> on any row (both always live). Changing one field
+            updates only that oil against the ceiling; other oils stay put. Results unlock when oil weights and
+            percentages both match this total (100%).
           </p>
         </div>
 
@@ -863,11 +987,11 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
           </div>
         </div>
 
-        <div className={'oil-table' + (oilEntryMode === 'percent' ? ' mode-percent' : ' mode-weight')}>
+        <div className="oil-table mode-dual">
           <div className="oil-head">
             <span>Oil</span>
             <span>Weight ({u})</span>
-            <span>%</span>
+            <span>% of total</span>
             <span />
           </div>
           {rows.length === 0 && (
@@ -888,7 +1012,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
                 <div className="oil-select-wrap">
                   <select
                     value={row.oilId}
-                    onChange={(e) => updateRow(row.key, { oilId: e.target.value })}
+                    onChange={(e) => updateRowOil(row.key, e.target.value)}
                     aria-label="Select oil or butter"
                   >
                     <option value="">— Select oil —</option>
@@ -916,8 +1040,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
                   step="any"
                   inputMode="decimal"
                   value={row.amount}
-                  disabled={oilEntryMode === 'percent'}
-                  onChange={(e) => updateRow(row.key, { amount: e.target.value })}
+                  onChange={(e) => updateRowWeight(row.key, e.target.value)}
                   aria-label={'Weight ' + (oil?.name || '')}
                 />
                 <div className="pct-input-wrap">
@@ -929,13 +1052,17 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
                     inputMode="decimal"
                     className={'pct-input' + (overMax ? ' warn-input' : '')}
                     value={row.pct}
-                    disabled={oilEntryMode === 'weight'}
-                    onChange={(e) => updateRow(row.key, { pct: e.target.value })}
-                    aria-label={'Percent ' + (oil?.name || '')}
+                    onChange={(e) => updateRowPct(row.key, e.target.value)}
+                    aria-label={'Percent of total ' + (oil?.name || '')}
                   />
                   <span className="pct-suffix">%</span>
                 </div>
-                <button type="button" className="icon-btn" aria-label="Remove oil" onClick={() => removeRow(row.key)}>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  aria-label="Remove oil"
+                  onClick={() => removeRow(row.key)}
+                >
                   ×
                 </button>
               </div>
@@ -948,24 +1075,25 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
           </button>
           <div className={pctStatusClass} role="status">
             <span>
-              Oil % total: <strong>{fmtNum(pctSum, 2)}%</strong>
+              Oil %: <strong>{fmtNum(pctSum, 2)}%</strong>
+              {' · '}
+              Weights: <strong>{fmtNum(weightSum, 4)} {u}</strong>
+              {' / '}
+              <strong>{fmtNum(parsedTotalOils, 4)} {u}</strong>
             </span>
-            {oilEntryMode === 'percent' && (
-              <span className="pct-hint">
-                {pctOk
-                  ? 'Unlocked — results live'
-                  : pctDelta === 0
-                    ? 'Need 100%'
-                    : pctDelta > 0
-                      ? fmtNum(pctDelta, 2) + '% over — lock until 100%'
-                      : fmtNum(Math.abs(pctDelta), 2) + '% short — lock until 100%'}
-              </span>
-            )}
-            {oilEntryMode === 'weight' && (
-              <span className="pct-hint muted-inline">
-                Live from weights · batch {fmtNum(displayWeightTotal, 2)} {u}
-              </span>
-            )}
+            <span className="pct-hint">
+              {recipeBalanced
+                ? 'Unlocked — matches Total oils ceiling'
+                : !parsedTotalOils
+                  ? 'Set Total oils ceiling'
+                  : !pctOk
+                    ? pctDelta > 0
+                      ? fmtNum(pctDelta, 2) + '% over 100% — locked'
+                      : fmtNum(Math.abs(pctDelta), 2) + '% short of 100% — locked'
+                    : weightDelta > 0
+                      ? fmtNum(weightDelta, 4) + ' ' + u + ' over ceiling — locked'
+                      : fmtNum(Math.abs(weightDelta), 4) + ' ' + u + ' under ceiling — locked'}
+            </span>
           </div>
         </div>
       </section>
