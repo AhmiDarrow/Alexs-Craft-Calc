@@ -306,7 +306,7 @@ export const ADDITIVES: Additive[] = [
     cautions:
       'Never add citric acid to the lye solution — it fizzes violently. Dissolve it in the water first, then add the lye.',
     lyeNote:
-      'Citric acid neutralizes lye: every 1 g of citric acid consumes ~0.624 g NaOH (0.88 g KOH). This calculator adds that extra lye automatically.',
+      'Citric acid neutralizes lye: every 1 g of citric acid consumes ~0.624 g NaOH (0.88 g pure KOH ≈ 0.978 g of 90% KOH). This calculator adds that extra lye automatically.',
     wiki: 'Citric acid is the pro move for hard-water areas: it chelates (binds) calcium and magnesium so they cannot form soap scum, which means richer lather, cleaner rinsing, and less “bathtub ring.” Use 1–2% of oil weight. Critical rule: dissolve the citric acid in the water phase first, then add the lye — dropping it into lye solution fizzes and splashes dangerously. And because citric acid consumes lye, you must add compensating lye: 0.624 g NaOH per gram of citric acid (0.88 g KOH). This calculator does that math for you automatically and tells you the adjusted amount.',
   },
   {

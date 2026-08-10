@@ -1,4 +1,11 @@
-import { getOil, getOilFattyAcids, KOH_FACTOR, type FattyAcid, type Oil } from '../data/oils'
+import {
+  getOil,
+  getOilFattyAcids,
+  KOH_FACTOR,
+  KOH_PURITY,
+  type FattyAcid,
+  type Oil,
+} from '../data/oils'
 import { getAdditive } from '../data/additives'
 
 export type LyeType = 'naoh' | 'koh'
@@ -83,6 +90,11 @@ export interface SoapResult {
 const G_PER_OZ = 28.349523125
 const G_PER_LB = 453.59237
 
+/** Citric-acid lye compensation — grams of lye per gram of acid (stoichiometric). */
+export const CITRIC_NAOH_COMP = 0.624
+/** 0.88 g pure KOH per g acid, ÷ 0.9 for 90% commercial KOH flakes. */
+export const CITRIC_KOH_COMP = 0.88 / KOH_PURITY
+
 /** Quality metrics (soapcalc.net-style) with balanced-bar target ranges. */
 export type QualityKey =
   | 'hardness'
@@ -110,6 +122,8 @@ export interface QualityMetric {
 }
 
 const FA_KEYS: FattyAcid[] = [
+  'caprylic',
+  'capric',
   'lauric',
   'myristic',
   'palmitic',
@@ -142,7 +156,7 @@ export const QUALITY_DEFS: Omit<QualityMetric, 'value' | 'status'>[] = [
     label: 'Conditioning',
     min: 44,
     max: 69,
-    hint: 'Oleic + linoleic + linolenic + ricinoleic — olive, avocado, castor, soft oils. Above ~69 the bar softens and cures slower.',
+    hint: 'Oleic + linoleic + linolenic + ricinoleic + palmitoleic — olive, avocado, macadamia, castor, soft oils. Above ~69 the bar softens and cures slower.',
   },
   {
     key: 'bubbly',
@@ -170,7 +184,7 @@ export const QUALITY_DEFS: Omit<QualityMetric, 'value' | 'status'>[] = [
     label: 'Mildness',
     min: 40,
     max: 70,
-    hint: 'Oleic + linoleic + linolenic + ricinoleic — olive, avocado, soft oils, castor. Low can feel harsh; very high is gentle but softens the bar.',
+    hint: 'Oleic + linoleic + linolenic + ricinoleic + palmitoleic — olive, avocado, macadamia, soft oils, castor. Low can feel harsh; very high is gentle but softens the bar.',
   },
   {
     key: 'iodine',
@@ -195,13 +209,11 @@ function statusFor(value: number | null, min: number, max: number): QualityStatu
   return 'good'
 }
 
-/** Weighted fatty-acid + iodine/INS quality profile for a recipe. */
-export function computeQualityProfile(
-  oils: OilLine[],
-  weightedIodine: number | null,
-  weightedIns: number | null,
-): QualityMetric[] {
+/** Accumulate weighted fatty-acid profile across a set of oils. */
+function accumulateFattyAcids(oils: OilLine[]): { fa: Record<FattyAcid, number>; total: number } {
   const fa: Record<FattyAcid, number> = {
+    caprylic: 0,
+    capric: 0,
     lauric: 0,
     myristic: 0,
     palmitic: 0,
@@ -225,16 +237,26 @@ export function computeQualityProfile(
   if (total > 0) {
     for (const k of FA_KEYS) fa[k] /= total
   }
+  return { fa, total }
+}
+
+/** Weighted fatty-acid + iodine/INS quality profile for a recipe. */
+export function computeQualityProfile(
+  oils: OilLine[],
+  weightedIodine: number | null,
+  weightedIns: number | null,
+): QualityMetric[] {
+  const { fa } = accumulateFattyAcids(oils)
 
   const group = (...keys: FattyAcid[]) => keys.reduce((s, k) => s + fa[k], 0)
   const values: Record<QualityKey, number | null> = {
-    hardness: group('lauric', 'myristic', 'palmitic', 'stearic'),
-    cleansing: group('lauric', 'myristic'),
-    conditioning: group('oleic', 'linoleic', 'linolenic', 'ricinoleic'),
-    bubbly: group('lauric', 'myristic'),
+    hardness: group('caprylic', 'capric', 'lauric', 'myristic', 'palmitic', 'stearic'),
+    cleansing: group('caprylic', 'capric', 'lauric', 'myristic'),
+    conditioning: group('oleic', 'linoleic', 'linolenic', 'ricinoleic', 'palmitoleic'),
+    bubbly: group('caprylic', 'capric', 'lauric', 'myristic'),
     creamy: group('palmitic', 'stearic', 'ricinoleic'),
     longevity: group('palmitic', 'stearic'),
-    mildness: group('oleic', 'linoleic', 'linolenic', 'ricinoleic'),
+    mildness: group('oleic', 'linoleic', 'linolenic', 'ricinoleic', 'palmitoleic'),
     iodine: weightedIodine,
     ins: weightedIns,
   }
@@ -255,31 +277,8 @@ export function computeQualityProfile(
  * Soapcalc.net suggests a typical balanced bar sits near 40:60.
  */
 export function computeSatRatio(oils: OilLine[]): { sat: number; unsat: number } {
-  const fa: Record<FattyAcid, number> = {
-    lauric: 0,
-    myristic: 0,
-    palmitic: 0,
-    stearic: 0,
-    ricinoleic: 0,
-    oleic: 0,
-    linoleic: 0,
-    linolenic: 0,
-    palmitoleic: 0,
-  }
-  let total = 0
-  for (const line of oils) {
-    if (!line.oilId || line.amount <= 0) continue
-    const profile = getOilFattyAcids(line.oilId)
-    total += line.amount
-    for (const k of FA_KEYS) {
-      const v = profile[k]
-      if (v != null && Number.isFinite(v)) fa[k] += v * line.amount
-    }
-  }
-  if (total > 0) {
-    for (const k of FA_KEYS) fa[k] /= total
-  }
-  const sat = fa.lauric + fa.myristic + fa.palmitic + fa.stearic
+  const { fa } = accumulateFattyAcids(oils)
+  const sat = fa.caprylic + fa.capric + fa.lauric + fa.myristic + fa.palmitic + fa.stearic
   const unsat =
     fa.ricinoleic + fa.oleic + fa.linoleic + fa.linolenic + fa.palmitoleic
   const sum = sat + unsat
@@ -426,7 +425,10 @@ export function calculateSoap(input: SoapInput): SoapResult {
       continue
     }
     totalOils += line.amount
-    const sap = input.lyeType === 'naoh' ? oil.sapNaoh : oil.sapNaoh * KOH_FACTOR
+    // NaOH: 100% purity (industrial grade). KOH: NaOH SAP × 1.4027 (MW ratio),
+    // then ÷ 0.9 — commercial KOH for liquid soap is ~90% pure (soapcalc default).
+    const sap =
+      input.lyeType === 'naoh' ? oil.sapNaoh : (oil.sapNaoh * KOH_FACTOR) / KOH_PURITY
     pureLye += line.amount * sap
     breakdown.push({
       oilId: oil.id,
@@ -500,11 +502,12 @@ export function calculateSoap(input: SoapInput): SoapResult {
       }
     })
 
-  // Citric acid neutralizes lye — compensate automatically (0.624 g NaOH / 0.88 g KOH per gram).
+  // Citric acid neutralizes lye — compensate automatically (stoichiometric factors).
   const citricAmount = additives
     .filter((a) => a.additiveId === 'citric-acid')
     .reduce((s, a) => s + a.amount, 0)
-  const citricLyeComp = citricAmount * (input.lyeType === 'naoh' ? 0.624 : 0.88)
+  const citricLyeComp =
+    citricAmount * (input.lyeType === 'naoh' ? CITRIC_NAOH_COMP : CITRIC_KOH_COMP)
   if (citricLyeComp > 0) {
     warnings.push(
       `Citric acid: added ${round(citricLyeComp, 2)} ${input.unit} of ${input.lyeType === 'naoh' ? 'NaOH' : 'KOH'} to compensate for the acid.`,
@@ -512,7 +515,9 @@ export function calculateSoap(input: SoapInput): SoapResult {
   }
 
   const sf = Math.max(0, Math.min(20, input.superfatPct)) / 100
-  const lyeWithSuperfat = (pureLye + citricLyeComp) * (1 - sf)
+  // Superfat discounts the oil-saponification lye only; the citric-acid
+  // compensation is added full-strength on top (the acid is not an oil).
+  const lyeWithSuperfat = pureLye * (1 - sf) + citricLyeComp
 
   let water = 0
   if (input.waterMethod === 'percent_oils') {

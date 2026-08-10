@@ -106,7 +106,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
       },
       {
         heading: 'Lye & superfat',
-        body: 'NaOH = bar soap. KOH = liquid soap (app uses KOH = NaOH SAP x 1.4027). Superfat % leaves that fraction of oils unsaponified - typical bars 4-8%. Pure lye (0% SF) is shown in meta for checking.',
+        body: 'NaOH = bar soap. KOH = liquid soap (app computes KOH = NaOH SAP × 1.4027 ÷ 0.9 for ~90% pure commercial KOH). Superfat % leaves that fraction of oils unsaponified - typical bars 4-8%. Pure lye (0% SF) is shown in meta for checking.',
       },
       {
         heading: 'Water methods',
@@ -173,7 +173,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     summary: 'How oils + lye become soap.',
     sections: [
       {
-        body: 'Saponification is the chemical reaction between triglycerides (oils/fats) and a strong alkali (NaOH or KOH). Each oil needs a characteristic amount of lye to convert fully — that ratio is the SAP value. This calculator multiplies each oil’s weight by its NaOH SAP (or × 1.4027 for KOH), sums them, then reduces by your superfat %.',
+        body: 'Saponification is the chemical reaction between triglycerides (oils/fats) and a strong alkali (NaOH or KOH). Each oil needs a characteristic amount of lye to convert fully — that ratio is the SAP value. This calculator multiplies each oil’s weight by its NaOH SAP (or × 1.4027 ÷ 0.9 for 90%-pure KOH), sums them, then reduces by your superfat %.',
       },
       {
         heading: 'Why SAP tables differ',
@@ -253,7 +253,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     summary: 'How the KOH path differs from bars.',
     sections: [
       {
-        body: 'Liquid soap uses potassium hydroxide. This app computes KOH from NaOH SAP × 1.4027. Process is often hot-process to a paste, neutralized (e.g. slight boric or citric solutions per your method), then diluted with distilled water to a usable viscosity.\n\nSuperfat in liquid soap is handled carefully — excess oils can cloud or separate. Dilution ratios vary (often paste:water around 1:1 to 1:2 by weight as a starting experiment). Preservatives may be needed once water activity and use pattern demand them — research modern liquid soap preservation; this wiki is not a micro lab.',
+        body: 'Liquid soap uses potassium hydroxide. This app computes KOH from NaOH SAP × 1.4027 (molecular-weight ratio), then ÷ 0.9 for the ~90% purity of commercial KOH flakes. Process is often hot-process to a paste, neutralized (e.g. slight boric or citric solutions per your method), then diluted with distilled water to a usable viscosity.\n\nSuperfat in liquid soap is handled carefully — excess oils can cloud or separate. Dilution ratios vary (often paste:water around 1:1 to 1:2 by weight as a starting experiment). Preservatives may be needed once water activity and use pattern demand them — research modern liquid soap preservation; this wiki is not a micro lab.',
       },
     ],
   },
@@ -317,7 +317,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
       },
       {
         heading: 'Citric acid & lye math',
-        body: 'Citric acid (0.5–2% of oils) chelates hard-water minerals so the soap lathers rich instead of scummy. It also neutralizes lye: every 1 g of citric acid consumes ~0.624 g NaOH (0.88 g KOH). This calculator adds the compensating lye automatically and tells you the adjusted amount. Never drop citric acid into lye solution — dissolve it in the water first, then add the lye.',
+        body: 'Citric acid (0.5–2% of oils) chelates hard-water minerals so the soap lathers rich instead of scummy. It also neutralizes lye: every 1 g of citric acid consumes ~0.624 g NaOH (0.88 g pure KOH ≈ 0.98 g of 90% KOH). This calculator adds the compensating lye automatically and tells you the adjusted amount. Never drop citric acid into lye solution — dissolve it in the water first, then add the lye.',
       },
       {
         heading: 'Colorants & botanicals',
@@ -523,7 +523,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     summary: 'Transparent calculator math.',
     sections: [
       {
-        body: 'Soap pure lye (NaOH) = Σ (oil_weight × sap_naoh)\nSoap pure lye (KOH) = Σ (oil_weight × sap_naoh × 1.4027)\nLye with superfat = pure_lye × (1 − superfat%/100)\nWater (% oils) = total_oils × (water%/100)\nWater (concentration c) = lye_with_sf × (1−c)/c\nWater (discount d) = total_oils × 0.38 × (1−d/100)\nSoap FO = total_oils × (fo%/100)\n\nCandle FO = total_wax × (fo%/100)\nDye blocks ≈ (wax_lb) × (blocks_per_lb)\n\nWeighted iodine/INS = weight-average of oils that have values.',
+        body: 'Soap pure lye (NaOH) = Σ (oil_weight × sap_naoh)\nSoap pure lye (KOH) = Σ (oil_weight × sap_naoh × 1.4027 ÷ 0.9)   — 1.4027 = NaOH→KOH molecular-weight ratio; ÷0.9 = 90% commercial KOH purity\nLye with superfat = pure_lye × (1 − superfat%/100) + citric_comp\nCitric compensation = citric_weight × 0.624 (NaOH) or × 0.978 (90% KOH)\nWater (% oils) = total_oils × (water%/100)\nWater (concentration c) = lye_with_sf × (1−c)/c\nWater (discount d) = total_oils × 0.38 × (1−d/100)\nSoap FO = total_oils × (fo%/100)\n\nCandle FO = total_wax × (fo%/100)\nDye blocks ≈ (wax_lb) × (blocks_per_lb)\n\nWeighted iodine/INS = weight-average of oils that have values.',
       },
     ],
   },

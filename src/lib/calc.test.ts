@@ -83,7 +83,8 @@ function nearly(a: number, b: number, eps = 0.05) {
     superfatPct: 0,
     fragrancePct: 0,
   })
-  nearly(ko.pureLye, na.pureLye * 1.4027, 0.02)
+  // Commercial KOH is ~90% pure → scale by 1.4027 / 0.9
+  nearly(ko.pureLye, na.pureLye * (1.4027 / 0.9), 0.02)
 }
 
 // Lye concentration water
@@ -292,7 +293,7 @@ function nearly(a: number, b: number, eps = 0.05) {
   nearly(withCitric.pureLye, base.pureLye + 20 * 0.624, 0.02)
   nearly(withCitric.lyeWithSuperfat, base.lyeWithSuperfat + 20 * 0.624, 0.02)
   assert(withCitric.warnings.some((w) => w.includes('Citric acid')), 'citric compensation warning')
-  // KOH compensation factor 0.88 per gram
+  // KOH compensation: 0.88 g pure KOH per gram → ÷ 0.9 for 90% flakes
   const kohBase = calculateSoap({
     ...defaultSoapInput(),
     unit: 'g',
@@ -310,7 +311,110 @@ function nearly(a: number, b: number, eps = 0.05) {
     fragrancePct: 0,
     additives: [{ additiveId: 'citric-acid', amount: 10 }],
   })
-  nearly(kohCitric.pureLye, kohBase.pureLye + 10 * 0.88, 0.02)
+  nearly(kohCitric.pureLye, kohBase.pureLye + 10 * (0.88 / 0.9), 0.02)
+}
+
+// MATH AUDIT — hand-computed lye / water / citric values (independent of engine)
+{
+  // KOH purity: 100 g coconut @ 0% SF → NaOH = 18.3 g; KOH = 18.3 × 1.4027 / 0.9 = 28.52 g
+  const koh = calculateSoap({
+    ...defaultSoapInput(),
+    unit: 'g',
+    oils: [{ oilId: 'coconut', amount: 100 }],
+    lyeType: 'koh',
+    superfatPct: 0,
+    fragrancePct: 0,
+  })
+  nearly(koh.pureLye, 18.3 * (1.4027 / 0.9), 0.01)
+  nearly(koh.lyeWithSuperfat, 18.3 * (1.4027 / 0.9), 0.01)
+
+  // Superfat discounts oil lye only; citric compensation is added full-strength.
+  // 1000 g olive @ 5% SF + 20 g citric → NaOH = 135×0.95 + 20×0.624 = 128.25 + 12.48 = 140.73
+  const r = calculateSoap({
+    ...defaultSoapInput(),
+    unit: 'g',
+    oils: [{ oilId: 'olive', amount: 1000 }],
+    superfatPct: 5,
+    fragrancePct: 0,
+    waterMethod: 'percent_oils',
+    waterAsPercentOfOils: 33,
+    additives: [{ additiveId: 'citric-acid', amount: 20 }],
+  })
+  nearly(r.lyeWithSuperfat, 128.25 + 12.48, 0.01)
+  nearly(r.pureLye, 135 + 12.48, 0.01)
+  nearly(r.water, 330, 0.01)
+
+  // Lye-concentration water uses the actual dissolved lye (incl. citric comp)
+  const rc = calculateSoap({
+    ...defaultSoapInput(),
+    unit: 'g',
+    oils: [{ oilId: 'olive', amount: 1000 }],
+    superfatPct: 5,
+    fragrancePct: 0,
+    waterMethod: 'lye_concentration',
+    lyeConcentrationPct: 33,
+    additives: [{ additiveId: 'citric-acid', amount: 20 }],
+  })
+  nearly(rc.water, 140.73 * (67 / 33), 0.05)
+}
+
+// MATH AUDIT — fatty-acid profile hand-computed for 40% olive / 25% coconut / 25% palm / 10% castor
+{
+  const { computeQualityProfile, computeSatRatio } = await import('./soapCalc')
+  const oils = [
+    { oilId: 'olive', amount: 400 },
+    { oilId: 'coconut', amount: 250 },
+    { oilId: 'palm', amount: 250 },
+    { oilId: 'castor', amount: 100 },
+  ]
+  const byKey = (m: { key: string; value: number | null }[]) =>
+    Object.fromEntries(m.map((x) => [x.key, x.value]))
+  const q = byKey(computeQualityProfile(oils, 60, 150))
+  // Weighted FAs: lauric 12.0 | myristic 4.75 | palmitic 18.95 | stearic 2.65 |
+  // ricinoleic 8.7 | oleic 40.25 | linoleic 7.4 | linolenic 0.4
+  nearly(q.hardness as number, 41.6, 0.1)
+  nearly(q.cleansing as number, 20.0, 0.1)
+  nearly(q.bubbly as number, 20.0, 0.1)
+  nearly(q.conditioning as number, 56.75, 0.1)
+  nearly(q.mildness as number, 56.75, 0.1)
+  nearly(q.creamy as number, 30.3, 0.1)
+  nearly(q.longevity as number, 21.6, 0.1)
+  const ratio = computeSatRatio(oils)
+  assert(ratio.sat === 42 && ratio.unsat === 58, `sat:unsat ${ratio.sat}:${ratio.unsat}`)
+}
+
+// Palmitoleic acid (macadamia) contributes to conditioning & mildness
+{
+  const { computeQualityProfile } = await import('./soapCalc')
+  const byKey = (m: { key: string; value: number | null }[]) =>
+    Object.fromEntries(m.map((x) => [x.key, x.value]))
+  // 100% macadamia: oleic 58 + palmitoleic 19 + palmitic 9 + stearic 4 + linoleic 2
+  const mac = byKey(computeQualityProfile([{ oilId: 'macadamia', amount: 100 }], 70, 120))
+  nearly(mac.hardness as number, 13, 0.1) // palmitic 9 + stearic 4
+  nearly(mac.cleansing as number, 0, 0.1)
+  nearly(mac.conditioning as number, 79, 0.1) // oleic 58 + linoleic 2 + palmitoleic 19
+  nearly(mac.mildness as number, 79, 0.1)
+  nearly(mac.creamy as number, 13, 0.1)
+  nearly(mac.longevity as number, 13, 0.1)
+  // Without palmitoleic, conditioning/mildness would be only 60 — verify it's higher
+  assert((mac.conditioning as number) > 70, 'palmitoleic boosts conditioning past 70')
+}
+
+// DATA AUDIT — every oil's SAP / iodine / INS / FA values inside published ranges
+{
+  const { OILS, OIL_FATTY_ACIDS } = await import('../data/oils')
+  for (const o of OILS) {
+    assert(o.sapNaoh >= 0.05 && o.sapNaoh <= 0.25, `${o.id} SAP in range`)
+    if (o.iodine != null) assert(o.iodine >= 1 && o.iodine <= 195, `${o.id} iodine in range`)
+    if (o.ins != null) assert(o.ins >= 5 && o.ins <= 350, `${o.id} INS in range`)
+  }
+  for (const [id, fa] of Object.entries(OIL_FATTY_ACIDS)) {
+    const s = Object.values(fa as Record<string, number>).reduce((a, b) => a + b, 0)
+    assert(s >= 75 && s <= 105, `${id} FA sum ${s.toFixed(1)} in 75–105 (minor FAs untracked)`)
+    for (const v of Object.values(fa as Record<string, number>)) {
+      assert(v >= 0 && v <= 100, `${id} FA value ${v} sane`)
+    }
+  }
 }
 
 // Recipe export pack round-trip (no DOM / localStorage required)
