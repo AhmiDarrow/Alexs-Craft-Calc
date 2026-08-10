@@ -281,6 +281,58 @@ export const WIKI_ARTICLES: WikiArticle[] = [
       },
     ],
   },
+  {
+    id: 'soap-additives',
+    title: 'Soap additives: oats, clays, milks & more',
+    category: 'soap',
+    tags: ['additives', 'oats', 'clay', 'honey', 'milk', 'salt', 'sugar', 'citric acid', 'charcoal', 'sodium lactate'],
+    summary: 'What to add, how much, when — and what it does.',
+    sections: [
+      {
+        body: 'Additives are everything you put in the batch beyond oils, lye, water, and fragrance: exfoliants, clays, milks, sugars, salts, botanicals, colorants, and shelf-life helpers. Usage rates are quoted as a percentage of total oil weight (the same base as fragrance). The calculator flags anything below or above the recommended range so you can see where a recipe sits at a glance.',
+      },
+      {
+        heading: 'Reading the additive table',
+        body: 'Each additive in the catalog lists a typical % of oils (e.g. kaolin 0.5–3%), a bench-side spoon measure per pound of oils (PPO), when to add it, what it does, and cautions. Enter a weight in your unit and the app shows you the live % of oils and whether you are inside the range.',
+      },
+      {
+        heading: 'Exfoliants: ground oats',
+        body: 'Colloidal (finely ground) oatmeal is the gentlest scrub — beta-glucan calms itchy, dry, sensitive skin. Use 1–4% of oils and grind it to a powder or the bar feels scratchy. Above ~5% the bar softens and trace thickens. Sprinkle a little on top of the loaf for a decorative finish with zero scratchiness.',
+      },
+      {
+        heading: 'Clays',
+        body: 'Kaolin (0.5–3%): silky slip, gentle, brightens color. Bentonite (0.5–3%): strong draw-out, creamier lather, can be drying. French green / illite and rhassoul: spa-style detox with natural tint. All clays absorb water and thicken batter — disperse in a little oil or water first and add at light trace. Keep rates modest or the bar can become drying and mute lather.',
+      },
+      {
+        heading: 'Liquids & sugars',
+        body: 'Honey (0.5–5%): humectant + extra bubbles, but it heats the batch — start at 1 tsp PPO and watch for gel or overheat. Sugar (0.5–2%): dissolved in the water phase, boosts lather in high-oleic bars. Sodium lactate (1–3%): hardens the bar and speeds unmolding — add to cooled lye solution.',
+      },
+      {
+        heading: 'Milks',
+        body: 'Goat milk powder (2–5%) and other milks make creamy, gentle bars. Keep the lye solution cool — hot milk + lye scorches orange or brown. Dissolve powder in water before the lye, or add at trace. The lactic acid in milk is naturally mild on skin.',
+      },
+      {
+        heading: 'Salts & silk',
+        body: 'Salt (1–4%): harder bar, dense creamy lather; dissolve in the water phase first. True salt bars are 25–50%+ salt with ~20% superfat — a different style than this gentle range. Silk (tussah, a pinch per pound dissolved in lye water) adds a silky glide and strengthens the bar.',
+      },
+      {
+        heading: 'Citric acid & lye math',
+        body: 'Citric acid (0.5–2% of oils) chelates hard-water minerals so the soap lathers rich instead of scummy. It also neutralizes lye: every 1 g of citric acid consumes ~0.624 g NaOH (0.88 g KOH). This calculator adds the compensating lye automatically and tells you the adjusted amount. Never drop citric acid into lye solution — dissolve it in the water first, then add the lye.',
+      },
+      {
+        heading: 'Colorants & botanicals',
+        body: 'Activated charcoal (0.3–1.5%): true black, sift into oil first. Titanium dioxide (0.2–1%): bright white base, disperse in oil not water. Skin-safe mica (0.1–1%): shimmer and color — never craft-store mica. Spirulina and French green clay give natural greens that can shift in lye; test small batches. Light botanicals (lavender buds, rose petals) are decorative — sprinkle on top so they stay pretty.',
+      },
+      {
+        heading: 'Shelf life helpers',
+        body: 'Rosemary oleoresin (ROE, 0.05–0.5%) is a natural antioxidant that slows rancidity (DOS) — a few drops per pound of oils is plenty, added to the warm oils or at trace.',
+      },
+      {
+        heading: 'Rules of thumb',
+        body: '• Weigh additives, don’t guess scoops.\n• Add at light trace so the batter is fluid enough to mix evenly.\n• Powders (clays, charcoal, TiO₂) should be dispersed in a little oil or water first to avoid clumps.\n• Anything that heats the batch (honey, sugar, milks) needs a cooler lye solution and a watchful eye.\n• More is not better — staying inside the range keeps lather, hardness, and skin feel intact.',
+      },
+    ],
+  },
 
   // ── Oils hub ───────────────────────────────────────
   {
@@ -520,6 +572,61 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     sections: [
       {
         body: 'Alex\'s Craft Calc provides educational craft math and general information. SAP values, FO ranges, wick hints, and wiki articles are starting points compiled for makers — not a substitute for supplier COAs, IFRA docs, SDS, local regulations, or professional lab testing. You are responsible for safe handling of lye, hot wax, and fragrances, and for the safety of products you give or sell. When in doubt, test small and verify with primary sources.',
+      },
+    ],
+  },
+  {
+    id: 'soap-quality',
+    title: 'Reading the quality profile',
+    category: 'soap',
+    tags: ['quality', 'hardness', 'cleansing', 'conditioning', 'bubbly', 'creamy', 'longevity', 'mildness', 'profile', 'bars'],
+    summary: 'What the 7 quality bars mean and the ideal ranges to aim for.',
+    sections: [
+      {
+        heading: 'The seven qualities',
+        body: 'Below the batch results you get seven quality numbers, each with an ideal range (same targets used by the classic SoapCalc). Each is the combined % of the fatty acids that drive it — a higher contributing fatty acid moves the bar toward that quality.\n\n• Hardness (29–54): lauric + myristic + palmitic + stearic. Below ~29 the bar dents and dissolves fast; above ~54 it is rock-hard and slow to wear (can get brittle to cut).\n• Cleansing (12–22): lauric + myristic (coconut family). Above ~22 strips skin oils; below ~12 can feel under-cleaning.\n• Conditioning (44–69): oleic + linoleic + linolenic + ricinoleic. Above ~69 the bar softens and cures slower.\n• Bubbly lather (14–46): lauric + myristic — fluffy suds. Too high with low superfat = drying.\n• Creamy lather (16–48): palmitic + stearic + ricinoleic — dense, lotion-like suds.\n• Longevity (18–47): palmitic + stearic — how slowly the bar wears down.\n• Mildness (40–70): oleic + linoleic + linolenic + ricinoleic — gentle skin feel (low is harsh).',
+      },
+      {
+        heading: 'How to use it',
+        body: 'The green band is the balanced-bar target. A marker inside the band means that quality is in range; outside means low (amber) or high (red) with a one-line hint on what to adjust. No recipe is perfect on all seven at once — castile is conditioning but soft, high-coconut is hard and bubbly but harsh. Aim for everything inside the band for an everyday bar, then break rules deliberately (salt bars, facial bars, laundry). Iodine and INS sit in the results meta row: iodine 41–70 keeps shelf life sane; INS 136–165 tracks hardness/stability. The saturated:unsaturated ratio under the bars typically lands near 40:60 for a balanced bar.',
+      },
+      {
+        heading: 'Where the numbers come from',
+        body: 'Each oil has a fatty-acid profile (see its oil article). The calculator weights those profiles by your oil amounts, so a quality value is simply the sum of the contributing fatty acids in your recipe. Values are guidance from craft averages — real bars vary with cure, water, superfat, and additives.',
+      },
+    ],
+  },
+  {
+    id: 'soap-fatty-acids',
+    title: 'Fatty acids & what they do',
+    category: 'soap',
+    tags: ['fatty acid', 'lauric', 'myristic', 'palmitic', 'stearic', 'oleic', 'linoleic', 'linolenic', 'ricinoleic', 'chemistry'],
+    summary: 'Each oil is a blend of fatty acids — here is what each one does in your bar.',
+    sections: [
+      {
+        heading: 'The cast',
+        body: '• Lauric (12:0) — coconut, palm kernel, babassu. Rock-hard bar, big fluffy bubbles, strong cleansing. Overdo it and the bar strips skin: keep total lauric oils moderate (~15–30%) or superfat higher.\n• Myristic (14:0) — coconut, palm kernel. Hardness, cleansing, and lather with a slightly milder edge than lauric.\n• Palmitic (16:0) — palm, tallow, lard, cocoa. The workhorse: hardness, creamy stable lather, longevity.\n• Stearic (18:0) — cocoa, tallow, shea. Hardness and creamy lather with the silkiest feel of the saturates; contributes most per % to bar firmness.\n• Oleic (18:1) — olive, avocado, canola, high-oleic sunflower. Conditioning and mildness; slow trace; softer, longer-cure bars at high %.\n• Linoleic (18:2) — sunflower, safflower, grapeseed, rice bran. Conditioning but the first to go rancid; keep moderate for shelf life.\n• Linolenic (18:3) — flax, hemp, chia, some camelina. Very conditioning, very prone to DOS — use small %.\n• Ricinoleic (18:1 OH) — castor. The oddball: boosts bubbles AND creaminess AND conditioning; humectant. 3–8% is the sweet spot.\n• Palmitoleic (16:1) — macadamia, some sea buckthorn. Minor; adds a bit of conditioning.',
+      },
+      {
+        heading: 'How to balance',
+        body: 'Saturates (lauric → stearic) build the bar: hardness, lather, longevity. Unsaturates (oleic → linolenic) build the feel: conditioning, mildness. A typical balanced bar is roughly 40% saturated / 60% unsaturated. When a recipe feels off, look at the quality profile: too soft → add palmitic/stearic (palm, tallow, lard, butters); no bubbles → add lauric (coconut); drying → cut lauric and raise superfat or add oleic; short shelf life → reduce linoleic/linolenic oils and use antioxidants.',
+      },
+    ],
+  },
+  {
+    id: 'soap-iodine-ins',
+    title: 'Iodine value & INS explained',
+    category: 'soap',
+    tags: ['iodine', 'ins', 'rancidity', 'dos', 'stability', 'hardness'],
+    summary: 'Two classic numbers for shelf life and bar firmness.',
+    sections: [
+      {
+        heading: 'Iodine value',
+        body: 'Iodine measures total unsaturation: every double bond can soak up iodine atoms. More unsaturation = softer oil, more conditioning — but also faster oxidation. In soap, high iodine means the bar stays soft longer and is more prone to rancidity (DOS). Common guidance: keep the recipe iodine roughly 41–70. High-iodine oils (flax, hemp, grapeseed, high-linoleic sunflower) should stay modest and the batch should cure in a cool, dark place.',
+      },
+      {
+        heading: 'INS number',
+        body: 'INS = SAP value − iodine value (a classic industry shortcut: saponification minus unsaturation). It is a hardness/stability proxy: high INS (coconut ~258, palm kernel ~227) = hard, stable, but potentially drying; low INS (castor ~95, olive ~109) = soft, conditioning. The common balanced range is roughly 136–165. INS is a rough guide, not a law — treat it as one more vote in the quality profile.',
       },
     ],
   },

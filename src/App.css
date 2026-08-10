@@ -770,6 +770,232 @@ label select:focus,
   font-variant-numeric: tabular-nums;
 }
 
+/* ── Soap quality profile ─────────────────────────── */
+.quality-panel {
+  margin-top: 1.15rem;
+  border-top: 1px dashed rgba(186, 120, 255, 0.25);
+  padding-top: 1rem;
+}
+
+.quality-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.quality-head h4 {
+  margin: 0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--alien-bright);
+}
+
+.quality-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 0.6rem 1rem;
+}
+
+.quality-metric {
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(10, 4, 20, 0.35);
+}
+
+.quality-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.quality-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.quality-value {
+  font-size: 0.9rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  color: var(--alien-hot);
+}
+
+.quality-value small {
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--faint);
+  margin-left: 0.2rem;
+}
+
+.quality-track {
+  position: relative;
+  height: 8px;
+  margin-top: 0.4rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.quality-band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 25%;
+  width: 50%;
+  background: linear-gradient(90deg, rgba(52, 211, 153, 0.25), rgba(52, 211, 153, 0.45));
+  border-radius: 999px;
+}
+
+.quality-marker {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 5px;
+  border-radius: 999px;
+  background: var(--alien-hot);
+  transform: translateX(-50%);
+}
+
+.quality-metric.low .quality-marker {
+  background: #fbbf24;
+  box-shadow: 0 0 6px rgba(251, 191, 36, 0.6);
+}
+
+.quality-metric.high .quality-marker {
+  background: #f87171;
+  box-shadow: 0 0 6px rgba(248, 113, 113, 0.6);
+}
+
+.quality-metric.good .quality-marker {
+  background: #34d399;
+  box-shadow: 0 0 6px rgba(52, 211, 153, 0.6);
+}
+
+.quality-hint {
+  margin: 0.4rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.quality-ratio {
+  margin: 0.75rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.quality-ratio strong {
+  color: var(--alien-hot);
+  font-weight: 700;
+}
+
+/* ── Soap additives ──────────────────────────────── */
+.additives-card {
+  margin-top: 1rem;
+}
+
+.additive-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) 110px auto 28px;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.additive-select-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.additive-select-wrap select {
+  flex: 1;
+  min-width: 0;
+}
+
+.additive-amount-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.additive-status {
+  font-size: 0.72rem;
+  font-weight: 650;
+  white-space: nowrap;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.additive-status.ok {
+  color: #34d399;
+  background: rgba(52, 211, 153, 0.12);
+  border-color: rgba(52, 211, 153, 0.35);
+}
+
+.additive-status.low {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.12);
+  border-color: rgba(251, 191, 36, 0.35);
+}
+
+.additive-status.high {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.12);
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+.additive-status.n\/a {
+  color: var(--faint);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.additive-table-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.additive-add-select {
+  max-width: 320px;
+}
+
+.additives-card .hint {
+  margin-top: 0;
+}
+
+@media (max-width: 640px) {
+  .additive-row {
+    grid-template-columns: 1fr 28px;
+    grid-template-areas:
+      'select remove'
+      'amount status';
+  }
+  .additive-select-wrap {
+    grid-area: select;
+  }
+  .additive-amount-wrap {
+    grid-area: amount;
+  }
+  .additive-status {
+    grid-area: status;
+    justify-self: start;
+  }
+  .additive-row .icon-btn {
+    grid-area: remove;
+  }
+}
+
 .hint-blocks {
   display: grid;
   grid-template-columns: 1fr 1fr;

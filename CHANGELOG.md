@@ -4,6 +4,23 @@ All notable changes to **Alex's Craft Calc** are documented here.
 
 ## [Unreleased]
 
+## [1.0.6] — 2026-08-10
+
+### Added
+- **Soap quality profile** — live fatty-acid breakdown (palmitic, stearic, oleic, linoleic, linolenic, ricinoleic, lauric/myristic) with per-acid good ranges and low/OK/high status, so you can see where a recipe sits and adjust toward a target bar
+- **Additives & add-ins support** — new card between oils and lye/water for ground oats, clays, honey, milks, salts, botanicals, silk, chelators, colorants, antioxidants (18-item catalog)
+  - Each additive shows recommended % of oils, spoon measure (PPO), phase to add, benefits, cautions, and live OK/low/high usage status
+  - Results table + batch stat; additives saved/loaded/shared with recipes; out-of-range usage warnings
+  - **Citric acid lye compensation** — adding citric acid automatically adds the extra NaOH/KOH it consumes (+0.624 g NaOH / +0.88 g KOH per gram)
+- **Wiki expansion** — new articles: soap additives & add-ins guide, fatty-acid quality guide, lye calculation corrections, plus per-product reference depth
+
+### Fixed
+- **Lye calculations** — NaOH purity corrected to 100% and KOH to 90% (industrial grades); per-oil SAP values now take priority over the generic average; water-as-% is computed off total oil weight (soapcalc parity); NaOH↔KOH conversion now uses the molecular-weight ratio (1.403) instead of a flat factor
+- **Quality ranges** aligned to soapcalc.net published bands (hardness, cleansing, conditioning, creaminess, longevity, iodine) with null-safe statuses
+
+### Tests
+- New coverage: lye purity, NaOH↔KOH conversion, water %-of-oils, fatty-acid profile math, additive usage status/warnings, citric-acid lye compensation (NaOH + KOH), storage round-trip with additives
+
 ## [1.0.5] — 2026-08-09
 
 ### Changed

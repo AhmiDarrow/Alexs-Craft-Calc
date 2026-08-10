@@ -472,3 +472,57 @@ export function oilsByCategory(): Record<Oil['category'], Oil[]> {
   for (const o of OILS) map[o.category].push(o)
   return map
 }
+
+/** Major fatty acids tracked for recipe-quality metrics. */
+export type FattyAcid =
+  | 'lauric'
+  | 'myristic'
+  | 'palmitic'
+  | 'stearic'
+  | 'ricinoleic'
+  | 'oleic'
+  | 'linoleic'
+  | 'linolenic'
+  | 'palmitoleic'
+
+/**
+ * Typical fatty-acid composition, % of total fatty acids (industry / CODEX
+ * reference averages — real lots vary by cultivar, season, and refining).
+ * Used to compute weighted recipe quality metrics.
+ */
+export const OIL_FATTY_ACIDS: Record<string, Partial<Record<FattyAcid, number>>> = {
+  olive: { oleic: 71, linoleic: 10, palmitic: 14, stearic: 2, linolenic: 1 },
+  coconut: { lauric: 48, myristic: 18, palmitic: 9, stearic: 3, oleic: 6, linoleic: 2 },
+  palm: { palmitic: 44, oleic: 39, linoleic: 10, stearic: 4, myristic: 1 },
+  'palm-kernel': { lauric: 47, myristic: 16, palmitic: 8, oleic: 15, stearic: 2, linoleic: 2 },
+  castor: { ricinoleic: 87, oleic: 6, linoleic: 4, stearic: 1, palmitic: 1 },
+  shea: { oleic: 44, stearic: 34, palmitic: 4, linoleic: 6 },
+  cocoa: { stearic: 34, oleic: 33, palmitic: 27, linoleic: 3 },
+  mango: { oleic: 46, stearic: 42, palmitic: 6, linoleic: 5 },
+  avocado: { oleic: 62, palmitic: 20, linoleic: 13, stearic: 1 },
+  'sweet-almond': { oleic: 66, linoleic: 22, palmitic: 6, stearic: 2 },
+  sunflower: { linoleic: 65, oleic: 20, palmitic: 6, stearic: 5 },
+  canola: { oleic: 61, linoleic: 20, linolenic: 9, palmitic: 4, stearic: 2 },
+  soybean: { linoleic: 51, oleic: 23, linolenic: 7, palmitic: 10, stearic: 4 },
+  'rice-bran': { oleic: 40, linoleic: 34, palmitic: 19, stearic: 2 },
+  grapeseed: { linoleic: 70, oleic: 16, palmitic: 7, stearic: 4 },
+  hemp: { linoleic: 56, linolenic: 18, oleic: 11, palmitic: 6, stearic: 3 },
+  jojoba: { oleic: 70, linoleic: 5, palmitic: 5, stearic: 5 },
+  lard: { oleic: 46, palmitic: 26, stearic: 14, linoleic: 10, myristic: 1 },
+  tallow: { oleic: 40, stearic: 20, palmitic: 26, linoleic: 4, myristic: 4 },
+  babassu: { lauric: 44, myristic: 16, palmitic: 9, stearic: 3, oleic: 13, linoleic: 2 },
+  meadowfoam: { oleic: 60, linoleic: 5, palmitic: 5, stearic: 5 },
+  neem: { oleic: 50, linoleic: 16, stearic: 16, palmitic: 16 },
+  apricot: { oleic: 64, linoleic: 27, palmitic: 5, stearic: 1 },
+  macadamia: { oleic: 58, palmitoleic: 19, palmitic: 9, stearic: 4, linoleic: 2 },
+  argan: { oleic: 46, linoleic: 34, palmitic: 13, stearic: 6 },
+  beeswax: { palmitic: 45, oleic: 30, stearic: 15 },
+  'coconut-fractionated': { lauric: 55, myristic: 20, palmitic: 10, oleic: 5 },
+  safflower: { linoleic: 74, oleic: 14, palmitic: 6, stearic: 3 },
+  sesame: { linoleic: 43, oleic: 40, palmitic: 10, stearic: 5 },
+  walnut: { linoleic: 60, linolenic: 12, oleic: 15, palmitic: 7, stearic: 3 },
+}
+
+export function getOilFattyAcids(id: string): Partial<Record<FattyAcid, number>> {
+  return OIL_FATTY_ACIDS[id] ?? {}
+}

@@ -12,12 +12,20 @@ import {
   percentsFromOils,
   sumOilPercents,
   weightsMatchCeiling,
+  computeQualityProfile,
+  computeSatRatio,
   type LyeType,
   type OilLine,
   type SoapInput,
   type SoapUnit,
   type WaterMethod,
 } from '../lib/soapCalc'
+import {
+  ADDITIVES,
+  ADDITIVE_CATEGORY_LABELS,
+  additiveUsageStatus,
+  getAdditive,
+} from '../data/additives'
 import {
   copyText,
   currentSoapSnapshot,
@@ -37,6 +45,12 @@ type OilRow = {
   oilId: string
   amount: string
   pct: string
+}
+
+type AdditiveRow = {
+  key: string
+  additiveId: string
+  amount: string
 }
 
 const PRESETS: { name: string; oils: OilLine[] }[] = [
@@ -96,6 +110,14 @@ function fmtNum(n: number, places = 2): string {
   return String(r)
 }
 
+/** Map a quality value onto the track: the ideal band always sits 25–75%. */
+function qualityBarPos(q: { value: number | null; min: number; max: number }): number {
+  const span = q.max - q.min
+  if (q.value == null || !(span > 0) || !Number.isFinite(q.value)) return 0
+  const t = (q.value - q.min) / span
+  return Math.max(0, Math.min(100, 25 + t * 50))
+}
+
 /** Build rows from weights against a fixed Total oils ceiling (not share-of-sum). */
 function rowsFromWeightOils(oils: OilLine[], ceiling: number): OilRow[] {
   const pcts = percentsFromOils(oils, ceiling > 0 ? ceiling : undefined)
@@ -150,6 +172,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
   const [totalOilsWeight, setTotalOilsWeight] = useState(() => fmtNum(defaultCeiling, 4))
   const [recipeName, setRecipeName] = useState('')
   const [recipeNotes, setRecipeNotes] = useState('')
+  const [additiveRows, setAdditiveRows] = useState<AdditiveRow[]>([])
   /** Stable library slot while editing a loaded/saved recipe (enables overwrite-by-id). */
   const [activeRecipeId, setActiveRecipeId] = useState<string | null>(null)
   const [saved, setSaved] = useState<SavedSoapRecipe[]>(() => listSoapRecipes())
@@ -205,6 +228,9 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
       waterDiscountPct: parseFloat(waterDiscountPct) || 0,
       fragrancePct: parseFloat(fragrancePct) || 0,
       unit,
+      additives: additiveRows
+        .filter((r) => r.additiveId && (parseFloat(r.amount) || 0) > 0)
+        .map((r) => ({ additiveId: r.additiveId, amount: parseFloat(r.amount) || 0 })),
     }),
     [
       resolvedOils,
@@ -216,6 +242,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
       waterDiscountPct,
       fragrancePct,
       unit,
+      additiveRows,
     ],
   )
 
@@ -254,6 +281,19 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
     }
     return calculateSoap(input)
   }, [lockWarnings, input])
+
+  /** Soapcalc-style quality profile (7 qualities) + sat:unsat ratio. */
+  const quality = useMemo(
+    () =>
+      result.locked
+        ? []
+        : computeQualityProfile(resolvedOils, result.weightedIodine, result.weightedIns),
+    [result.locked, resolvedOils, result.weightedIodine, result.weightedIns],
+  )
+  const satRatio = useMemo(
+    () => (result.locked ? null : computeSatRatio(resolvedOils)),
+    [result.locked, resolvedOils],
+  )
 
   /**
    * Edit weight → recompute only that row's % from ceiling.
@@ -313,6 +353,29 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
         pct: '0',
       },
     ])
+  }
+
+  function addAdditiveRow(additiveId = '') {
+    setAdditiveRows((prev) => [
+      ...prev,
+      {
+        key: uid(),
+        additiveId,
+        amount: '',
+      },
+    ])
+  }
+
+  function updateAdditiveId(key: string, additiveId: string) {
+    setAdditiveRows((prev) => prev.map((r) => (r.key === key ? { ...r, additiveId } : r)))
+  }
+
+  function updateAdditiveAmount(key: string, amountStr: string) {
+    setAdditiveRows((prev) => prev.map((r) => (r.key === key ? { ...r, amount: amountStr } : r)))
+  }
+
+  function removeAdditiveRow(key: string) {
+    setAdditiveRows((prev) => prev.filter((r) => r.key !== key))
   }
 
   function removeRow(key: string) {
@@ -444,6 +507,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
     setRows(rowsFromWeightOils(d.oils, total))
     setRecipeName('')
     setRecipeNotes('')
+    setAdditiveRows([])
     setActiveRecipeId(null)
     onToast?.('Soap calculator reset')
   }
@@ -482,6 +546,15 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
       }))
   }
 
+  function snapshotAdditives() {
+    return additiveRows
+      .filter((r) => r.additiveId && (parseFloat(r.amount) || 0) > 0)
+      .map((r) => ({
+        additiveId: r.additiveId,
+        amount: parseFloat(r.amount) || 0,
+      }))
+  }
+
   function handleSave() {
     const name = recipeName.trim() || 'Soap ' + new Date().toLocaleDateString()
     const { recipe, write, overwritten } = saveSoapRecipe({
@@ -499,6 +572,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
       oilEntryMode: 'dual',
       totalOilsWeight: parsedTotalOils > 0 ? parsedTotalOils : undefined,
       notes: recipeNotes.trim() || undefined,
+      additives: snapshotAdditives(),
     })
     if (!write.ok) {
       onToast?.(write.error)
@@ -573,6 +647,13 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
     setUnit(nextUnit)
     setRecipeName(r.name)
     setRecipeNotes(r.notes || '')
+    setAdditiveRows(
+      (r.additives ?? []).map((a) => ({
+        key: uid(),
+        additiveId: a.additiveId,
+        amount: String(a.amount),
+      })),
+    )
     setActiveRecipeId(r.id)
     setShowSaved(false)
     onToast?.(`Loaded “${r.name}”`)
@@ -605,6 +686,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
       oilEntryMode: 'dual',
       totalOilsWeight: parsedTotalOils > 0 ? parsedTotalOils : undefined,
       notes: recipeNotes.trim() || undefined,
+      additives: snapshotAdditives(),
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -621,6 +703,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
     unit,
     parsedTotalOils,
     recipeNotes,
+    additiveRows,
   ])
 
   const formatRecipeText = useCallback(() => {
@@ -660,6 +743,19 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
       '',
       'Oils:',
       ...oilLines,
+      ...(additiveRows.some((r) => r.additiveId && (parseFloat(r.amount) || 0) > 0)
+        ? [
+            '',
+            'Additives:',
+            ...additiveRows
+              .filter((r) => r.additiveId && (parseFloat(r.amount) || 0) > 0)
+              .map((r) => {
+                const add = getAdditive(r.additiveId)
+                const amt = parseFloat(r.amount) || 0
+                return '  • ' + (add?.name || r.additiveId) + ': ' + fmtNum(amt, 4) + ' ' + u
+              }),
+          ]
+        : []),
       '',
       result.locked
         ? 'Results locked — oil weights/% must match Total oils ceiling (100%).'
@@ -694,6 +790,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
     weightSum,
     pctSum,
     recipeNotes,
+    additiveRows,
   ])
 
   async function handleCopy() {
@@ -1098,6 +1195,117 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
         </div>
       </section>
 
+      <section className="card additives-card">
+        <div className="card-title-row">
+          <h3>Additives & add-ins</h3>
+          <button type="button" className="linkish" onClick={() => onOpenWiki?.('soap-additives')}>
+            Additive guide
+          </button>
+        </div>
+        <p className="hint">
+          Ground oats, clays, milks, salts, sugars, botanicals — weighed in {u}, checked as % of
+          oils. Amounts are added to your batch total; anything outside the recommended range is
+          flagged in results.
+        </p>
+        {additiveRows.length === 0 && (
+          <p className="hint">None yet — pick an additive below (colloidal oats, kaolin, honey…).</p>
+        )}
+        {additiveRows.map((row) => {
+          const add = getAdditive(row.additiveId)
+          const amt = parseFloat(row.amount) || 0
+          const pctOfOils = parsedTotalOils > 0 && amt > 0 ? (amt / parsedTotalOils) * 100 : 0
+          const usage = add ? additiveUsageStatus(pctOfOils, add.usagePct) : 'n/a'
+          const usageCls = usage === 'good' ? 'ok' : usage
+          const usageLabel =
+            usage === 'good'
+              ? `OK · ${add!.usagePct.min}–${add!.usagePct.max}%`
+              : usage === 'low'
+                ? `Low · need ${add!.usagePct.min}–${add!.usagePct.max}%`
+                : usage === 'high'
+                  ? `High · max ${add!.usagePct.max}%`
+                  : '—'
+          return (
+            <div className="additive-row" key={row.key}>
+              <div className="additive-select-wrap">
+                <select
+                  value={row.additiveId}
+                  onChange={(e) => updateAdditiveId(row.key, e.target.value)}
+                  aria-label="Select additive"
+                >
+                  <option value="">— Select additive —</option>
+                  {Object.entries(ADDITIVE_CATEGORY_LABELS).map(([cat, label]) => (
+                    <optgroup key={cat} label={label}>
+                      {ADDITIVES.filter((a) => a.category === cat).map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name} ({a.usagePct.min}–{a.usagePct.max}%)
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="info-chip"
+                  title={add?.benefits || 'Additive info'}
+                  aria-label={'Wiki: ' + (add?.name || 'additive')}
+                  disabled={!row.additiveId}
+                  onClick={() => row.additiveId && onOpenWiki?.('soap-additives')}
+                >
+                  i
+                </button>
+              </div>
+              <div className="pct-input-wrap additive-amount-wrap">
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  inputMode="decimal"
+                  className="weight-input"
+                  value={row.amount}
+                  onChange={(e) => updateAdditiveAmount(row.key, e.target.value)}
+                  aria-label={'Amount ' + (add?.name || '')}
+                  placeholder="0"
+                />
+                <span className="pct-suffix">{u}</span>
+              </div>
+              <span className={'additive-status ' + usageCls}>{usageLabel}</span>
+              <button
+                type="button"
+                className="icon-btn"
+                aria-label="Remove additive"
+                onClick={() => removeAdditiveRow(row.key)}
+              >
+                ×
+              </button>
+            </div>
+          )
+        })}
+        <div className="additive-table-footer">
+          <select
+            className="additive-add-select"
+            value=""
+            onChange={(e) => {
+              if (e.target.value) addAdditiveRow(e.target.value)
+            }}
+            aria-label="Add additive"
+          >
+            <option value="">+ Add additive…</option>
+            {Object.entries(ADDITIVE_CATEGORY_LABELS).map(([cat, label]) => (
+              <optgroup key={cat} label={label}>
+                {ADDITIVES.filter((a) => a.category === cat).map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name} ({a.usagePct.min}–{a.usagePct.max}%)
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          <button type="button" className="add-btn" onClick={() => addAdditiveRow()}>
+            + Additive
+          </button>
+        </div>
+      </section>
+
       <div className="split-grid">
         <section className="card">
           <h3>Lye & superfat</h3>
@@ -1264,6 +1472,13 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
               <small>{u}</small>
             </span>
           </div>
+          <div className="stat">
+            <span className="stat-label">Additives</span>
+            <span className="stat-value">
+              {result.locked ? '—' : result.additiveTotal}
+              <small>{u}</small>
+            </span>
+          </div>
         </div>
         <div className="meta-row">
           <span>
@@ -1281,6 +1496,60 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
             </span>
           )}
         </div>
+        {!result.locked && quality.length > 0 && (
+          <div className="quality-panel">
+            <div className="quality-head">
+              <h4>Quality profile</h4>
+              <button
+                type="button"
+                className="linkish"
+                onClick={() => onOpenWiki?.('soap-quality')}
+              >
+                How to read this
+              </button>
+            </div>
+            <div className="quality-grid">
+              {quality.map((q) => (
+                <div key={q.key} className={'quality-metric ' + q.status}>
+                  <div className="quality-top">
+                    <span className="quality-label">{q.label}</span>
+                    <span className="quality-value">
+                      {q.value == null ? '—' : q.value}
+                      <small>
+                        {' '}
+                        ideal {q.min}–{q.max}
+                      </small>
+                    </span>
+                  </div>
+                  <div className="quality-track">
+                    <div className="quality-band" />
+                    <div
+                      className="quality-marker"
+                      style={{ left: qualityBarPos(q) + '%' }}
+                      title={
+                        q.status === 'good'
+                          ? 'In ideal range'
+                          : q.status === 'low'
+                            ? 'Below ideal range'
+                            : 'Above ideal range'
+                      }
+                    />
+                  </div>
+                  {q.status !== 'good' && <p className="quality-hint">{q.hint}</p>}
+                </div>
+              ))}
+            </div>
+            {satRatio != null && (
+              <p className="quality-ratio">
+                Saturated : unsaturated ≈{' '}
+                <strong>
+                  {fmtNum(satRatio.sat, 0)}:{fmtNum(satRatio.unsat, 0)}
+                </strong>{' '}
+                — a typical balanced bar sits near 40:60.
+              </p>
+            )}
+          </div>
+        )}
         {!result.locked && result.oilBreakdown.length > 0 && (
           <div className="breakdown">
             <h4>Oil breakdown</h4>
@@ -1292,6 +1561,32 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
                   </button>
                   <span>
                     {b.amount} {u} · {b.pct}%
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {!result.locked && result.additives.length > 0 && (
+          <div className="breakdown">
+            <h4>Additives & add-ins</h4>
+            <ul>
+              {result.additives.map((a) => (
+                <li key={a.additiveId}>
+                  <button
+                    type="button"
+                    className="linkish"
+                    onClick={() => onOpenWiki?.('soap-additives')}
+                  >
+                    {a.name}
+                  </button>
+                  <span className={'additive-status ' + a.status}>
+                    {a.amount} {u} · {a.pctOfOils}% of oils ·{' '}
+                    {a.status === 'ok'
+                      ? `within ${a.usageMin}–${a.usageMax}%`
+                      : a.status === 'low'
+                        ? `below recommended ${a.usageMin}–${a.usageMax}%`
+                        : `above recommended ${a.usageMin}–${a.usageMax}%`}
                   </span>
                 </li>
               ))}

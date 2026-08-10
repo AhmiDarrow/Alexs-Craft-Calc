@@ -29,6 +29,8 @@ export interface SavedSoapRecipe {
   totalOilsWeight?: number
   /** Free-form maker notes / custom recipe field */
   notes?: string
+  /** Add-ins: ground oats, clays, milks, etc. (weight in the recipe unit) */
+  additives?: { additiveId: string; amount: number }[]
 }
 
 export interface SavedCandleRecipe {
@@ -92,6 +94,19 @@ function isSoapRecipe(v: unknown): v is SavedSoapRecipe {
   )
     return false
   if (v.unit !== 'g' && v.unit !== 'oz' && v.unit !== 'lb') return false
+  if (
+    v.additives !== undefined &&
+    (!Array.isArray(v.additives) ||
+      !v.additives.every(
+        (a) =>
+          isRecord(a) &&
+          typeof a.additiveId === 'string' &&
+          a.additiveId.length > 0 &&
+          typeof a.amount === 'number' &&
+          Number.isFinite(a.amount),
+      ))
+  )
+    return false
   return v.oils.every(
     (o) =>
       isRecord(o) &&
@@ -226,6 +241,7 @@ export function saveSoapRecipe(
       oilEntryMode: recipe.oilEntryMode,
       totalOilsWeight: recipe.totalOilsWeight,
       notes: recipe.notes,
+      additives: recipe.additives,
     } as SavedSoapRecipe,
     false,
   )
@@ -350,6 +366,17 @@ function normalizeSoap(r: SavedSoapRecipe, forceNewId = true): SavedSoapRecipe {
     typeof r.totalOilsWeight === 'number' && Number.isFinite(r.totalOilsWeight) && r.totalOilsWeight > 0
       ? r.totalOilsWeight
       : undefined
+  const additives = (Array.isArray(r.additives) ? r.additives : [])
+    .filter(
+      (a) =>
+        a &&
+        typeof a.additiveId === 'string' &&
+        a.additiveId &&
+        typeof a.amount === 'number' &&
+        Number.isFinite(a.amount) &&
+        a.amount > 0,
+    )
+    .map((a) => ({ additiveId: a.additiveId.slice(0, 60), amount: a.amount }))
   const id =
     !forceNewId && typeof r.id === 'string' && r.id.trim()
       ? r.id.trim().slice(0, 80)
@@ -390,6 +417,7 @@ function normalizeSoap(r: SavedSoapRecipe, forceNewId = true): SavedSoapRecipe {
     oilEntryMode,
     ...(totalOilsWeight != null ? { totalOilsWeight } : {}),
     ...(notes ? { notes } : {}),
+    ...(additives.length > 0 ? { additives } : {}),
   }
 }
 

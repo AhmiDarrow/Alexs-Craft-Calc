@@ -181,6 +181,138 @@ function nearly(a: number, b: number, eps = 0.05) {
   nearly(sumOilPercents(ceilingPcts.map((p) => p.pct)), 100, 0.05)
 }
 
+// Quality profile — 7 soapcalc-style qualities with ideal ranges + sat:unsat ratio
+{
+  const { computeQualityProfile, computeSatRatio } = await import('./soapCalc')
+  const byKey = (m: { key: string; value: number | null }[]) =>
+    Object.fromEntries(m.map((x) => [x.key, x.value]))
+  const q = (oils: { oilId: string; amount: number }[]) =>
+    computeQualityProfile(oils, 60, 150)
+
+  // 100% coconut: high cleansing + bubbly + hardness, low conditioning
+  const coconut = byKey(q([{ oilId: 'coconut', amount: 100 }]))
+  assert(coconut.cleansing != null && coconut.cleansing > 22, 'coconut cleansing high')
+  assert(coconut.bubbly != null && coconut.bubbly > 46, 'coconut bubbly high')
+  assert(coconut.hardness != null && coconut.hardness > 54, 'coconut hardness high')
+  assert(coconut.conditioning != null && coconut.conditioning < 44, 'coconut conditioning low')
+
+  // 100% olive: high conditioning + mildness, low hardness/cleansing
+  const olive = byKey(q([{ oilId: 'olive', amount: 100 }]))
+  assert(olive.conditioning != null && olive.conditioning > 69, 'olive conditioning high')
+  assert(olive.mildness != null && olive.mildness >= 40, 'olive mildness high')
+  assert(olive.hardness != null && olive.hardness < 29, 'olive hardness low')
+  assert(olive.cleansing != null && olive.cleansing < 12, 'olive cleansing low')
+
+  // Everyday Bar lands every quality inside its ideal range
+  const everyday = byKey(
+    q([
+      { oilId: 'olive', amount: 400 },
+      { oilId: 'coconut', amount: 250 },
+      { oilId: 'palm', amount: 250 },
+      { oilId: 'castor', amount: 100 },
+    ]),
+  )
+  const EXPECT: [string, number, number][] = [
+    ['hardness', 29, 54],
+    ['cleansing', 12, 22],
+    ['conditioning', 44, 69],
+    ['bubbly', 14, 46],
+    ['creamy', 16, 48],
+    ['longevity', 18, 47],
+    ['mildness', 40, 70],
+  ]
+  for (const [key, min, max] of EXPECT) {
+    const v = everyday[key] as number
+    assert(v != null && v >= min && v <= max, `everyday ${key} ${v} in ${min}-${max}`)
+  }
+  // Iodine / INS pass through untouched
+  assert(everyday.ins === 150, 'ins passthrough')
+  assert(everyday.iodine === 60, 'iodine passthrough')
+
+  // Saturated : unsaturated ratio — castile mostly unsaturated, coconut mostly saturated
+  const oliveRatio = computeSatRatio([{ oilId: 'olive', amount: 100 }])
+  assert(oliveRatio.unsat > oliveRatio.sat, 'olive mostly unsaturated')
+  const cocoRatio = computeSatRatio([{ oilId: 'coconut', amount: 100 }])
+  assert(cocoRatio.sat > cocoRatio.unsat, 'coconut mostly saturated')
+}
+
+// Additives: % of oils, usage status, batch total, warnings
+{
+  const r = calculateSoap({
+    ...defaultSoapInput(),
+    unit: 'g',
+    oils: [{ oilId: 'olive', amount: 1000 }],
+    superfatPct: 5,
+    fragrancePct: 0,
+    waterMethod: 'percent_oils',
+    waterAsPercentOfOils: 33,
+    additives: [
+      { additiveId: 'colloidal-oats', amount: 20 }, // 2% → ok (1–4)
+      { additiveId: 'kaolin', amount: 40 }, // 4% → high (>3)
+      { additiveId: 'honey', amount: 2 }, // 0.2% → low (<0.5)
+    ],
+  })
+  nearly(r.additiveTotal, 62)
+  nearly(r.totalBatch, 1000 + 135 * 0.95 + 330 + 62, 0.05)
+  const oats = r.additives.find((a) => a.additiveId === 'colloidal-oats')
+  assert(oats != null && oats.status === 'ok', 'oats within range')
+  nearly(oats?.pctOfOils ?? 0, 2, 0.01)
+  const kaolin = r.additives.find((a) => a.additiveId === 'kaolin')
+  assert(kaolin != null && kaolin.status === 'high', 'kaolin above range')
+  const honey = r.additives.find((a) => a.additiveId === 'honey')
+  assert(honey != null && honey.status === 'low', 'honey below range')
+  assert(r.warnings.some((w) => w.includes('above recommended')), 'high usage warning')
+  assert(r.warnings.some((w) => w.includes('below recommended')), 'low usage warning')
+  // Locked result carries empty additive fields
+  const locked = emptyLockedResult(['x'])
+  assert(locked.additives.length === 0 && locked.additiveTotal === 0, 'locked additives empty')
+}
+
+// Citric acid lye compensation (0.624 g NaOH / 0.88 g KOH per gram)
+{
+  const base = calculateSoap({
+    ...defaultSoapInput(),
+    unit: 'g',
+    oils: [{ oilId: 'olive', amount: 1000 }],
+    superfatPct: 0,
+    fragrancePct: 0,
+    waterMethod: 'percent_oils',
+    waterAsPercentOfOils: 33,
+  })
+  const withCitric = calculateSoap({
+    ...defaultSoapInput(),
+    unit: 'g',
+    oils: [{ oilId: 'olive', amount: 1000 }],
+    superfatPct: 0,
+    fragrancePct: 0,
+    waterMethod: 'percent_oils',
+    waterAsPercentOfOils: 33,
+    additives: [{ additiveId: 'citric-acid', amount: 20 }],
+  })
+  nearly(withCitric.pureLye, base.pureLye + 20 * 0.624, 0.02)
+  nearly(withCitric.lyeWithSuperfat, base.lyeWithSuperfat + 20 * 0.624, 0.02)
+  assert(withCitric.warnings.some((w) => w.includes('Citric acid')), 'citric compensation warning')
+  // KOH compensation factor 0.88 per gram
+  const kohBase = calculateSoap({
+    ...defaultSoapInput(),
+    unit: 'g',
+    oils: [{ oilId: 'coconut', amount: 100 }],
+    lyeType: 'koh',
+    superfatPct: 0,
+    fragrancePct: 0,
+  })
+  const kohCitric = calculateSoap({
+    ...defaultSoapInput(),
+    unit: 'g',
+    oils: [{ oilId: 'coconut', amount: 100 }],
+    lyeType: 'koh',
+    superfatPct: 0,
+    fragrancePct: 0,
+    additives: [{ additiveId: 'citric-acid', amount: 10 }],
+  })
+  nearly(kohCitric.pureLye, kohBase.pureLye + 10 * 0.88, 0.02)
+}
+
 // Recipe export pack round-trip (no DOM / localStorage required)
 async function testSharePacks() {
   const {
@@ -244,6 +376,32 @@ async function testSharePacks() {
     assert(candleParsed.kind === 'candle', 'candle kind')
     assert(candleParsed.candle?.[0]?.waxId === 'soy-111', 'wax id')
     assert(candleParsed.candle?.[0]?.notes?.includes('CD-10'), 'candle notes')
+  }
+
+  // Additive round-trip through share pack (oats survive normalize + parse)
+  const addPack = buildSoapSharePack({
+    id: 'soap-add-test',
+    name: 'Additive bar',
+    savedAt: new Date().toISOString(),
+    oils: [{ oilId: 'olive', amount: 1000, pct: 100 }],
+    lyeType: 'naoh',
+    superfatPct: 5,
+    waterMethod: 'percent_oils',
+    waterAsPercentOfOils: 33,
+    lyeConcentrationPct: 33,
+    waterDiscountPct: 0,
+    fragrancePct: 3,
+    unit: 'g',
+    additives: [{ additiveId: 'colloidal-oats', amount: 20 }],
+  })
+  const addParsed = parseSharePayload(packToJson(addPack))
+  assert(addParsed.ok, 'additive pack parses')
+  if (addParsed.ok) {
+    assert(
+      addParsed.soap?.[0]?.additives?.[0]?.additiveId === 'colloidal-oats',
+      'additive id round-trip',
+    )
+    assert(addParsed.soap?.[0]?.additives?.[0]?.amount === 20, 'additive amount round-trip')
   }
 
   // Bare recipe object (friend pasted without wrapper)
