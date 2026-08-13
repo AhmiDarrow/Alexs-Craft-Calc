@@ -392,6 +392,8 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
     const total = converted.reduce((s, o) => s + o.amount, 0)
     setTotalOilsWeight(fmtNum(total, 4))
     setRows(rowsFromWeightOils(converted, total))
+    // Presets are oil-only formulas — drop leftover add-ins from the previous recipe.
+    setAdditiveRows([])
     if (name) setRecipeName(name)
     // Preset is a new working copy — don't overwrite a previously loaded library slot.
     setActiveRecipeId(null)
@@ -406,6 +408,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
     const total =
       parsedTotalOils > 0 ? parsedTotalOils : unit === 'lb' ? 2 : unit === 'oz' ? 32 : 1000
     setRows([])
+    setAdditiveRows([])
     setTotalOilsWeight(fmtNum(total, 4))
     setRecipeName('Custom')
     setRecipeNotes('')
@@ -528,6 +531,14 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
           // % of ceiling is unit-invariant; recompute from converted mass for safety
           pct: fmtNum(pctOfCeiling(amount, nextCeiling > 0 ? nextCeiling : 0), 2),
         }
+      }),
+    )
+    // Additives are stored in the recipe unit too — convert with oils/ceiling.
+    setAdditiveRows((prev) =>
+      prev.map((r) => {
+        const n = parseFloat(r.amount)
+        if (!Number.isFinite(n) || r.amount.trim() === '') return r
+        return { ...r, amount: fmtNum(convertWeight(n, unit, next), 4) }
       }),
     )
     if (nextCeiling > 0) {

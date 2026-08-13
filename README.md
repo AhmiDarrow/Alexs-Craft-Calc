@@ -148,4 +148,4 @@ START.bat               One-click web launcher
 Alien Purple — void blacks, amethyst gradients, neon violet accents.
 
 ---
-Built for Ahmi · Alex's Craft Calc v1.0.5
+Built for Ahmi · Alex's Craft Calc v1.0.8

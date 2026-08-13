@@ -4,6 +4,27 @@ All notable changes to **Alex's Craft Calc** are documented here.
 
 ## [Unreleased]
 
+## [1.0.8] — 2026-08-13
+
+### Fixed
+- **Soap calc hardening** — non-finite oil amounts, superfat, water, and fragrance no longer poison batch totals (NaN/Infinity rejected; clamps use safe fallbacks)
+- **Candle calc hardening** — non-finite wax, fragrance load, vessel count, and wick diameter return a safe zero result instead of NaN
+- **Percent / ceiling helpers** — `weightsMatchCeiling` and `isPercentTotalLocked` reject non-finite inputs so NaN cannot unlock results
+- **Soap UI** — changing units converts additive weights; presets and Custom clear leftover additives
+
+### Tests
+- Adversarial coverage: empty/zero/negative oils, NaN/∞ oils and clamps, unknown oil ids, candle NaN paths, wick NaN diameter, import garbage / null amounts / prototype-pollution keys
+
+## [1.0.7] — 2026-08-10
+
+### Added
+- **21 new oils/butters** in the soap catalog with SAP values and wiki blurbs
+- Mobile polish pass across calculator chrome and oil entry
+
+### Fixed
+- Fatty-acid quality profile audit fixes
+- Additives support polish (catalog, usage status, recipe I/O)
+
 ## [1.0.6] — 2026-08-10
 
 ### Added

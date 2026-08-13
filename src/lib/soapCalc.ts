@@ -318,6 +318,7 @@ export function sumOilPercents(pcts: number[]): number {
 }
 
 export function isPercentTotalLocked(sumPct: number, eps = PCT_TOTAL_EPS): boolean {
+  if (!Number.isFinite(sumPct)) return false
   return Math.abs(sumPct - 100) <= eps
 }
 
@@ -359,19 +360,20 @@ export function percentsFromOils(
   lines: OilLine[],
   ceiling?: number,
 ): { oilId: string; pct: number }[] {
+  const safeAmt = (a: number) => (Number.isFinite(a) && a > 0 ? a : 0)
   if (ceiling != null && ceiling > 0) {
     return lines.map((l) => ({
       oilId: l.oilId,
-      pct: pctOfCeiling(l.amount > 0 ? l.amount : 0, ceiling),
+      pct: pctOfCeiling(safeAmt(l.amount), ceiling),
     }))
   }
-  const total = lines.reduce((s, l) => s + (l.amount > 0 ? l.amount : 0), 0)
+  const total = lines.reduce((s, l) => s + safeAmt(l.amount), 0)
   if (!(total > 0)) {
     return lines.map((l) => ({ oilId: l.oilId, pct: 0 }))
   }
   return lines.map((l) => ({
     oilId: l.oilId,
-    pct: round(((l.amount > 0 ? l.amount : 0) / total) * 100, 4),
+    pct: round((safeAmt(l.amount) / total) * 100, 4),
   }))
 }
 
@@ -381,8 +383,10 @@ export function weightsMatchCeiling(
   ceiling: number,
   eps = PCT_TOTAL_EPS,
 ): boolean {
-  if (!(ceiling > 0)) return false
-  const sum = amounts.reduce((s, a) => s + (Number.isFinite(a) && a > 0 ? a : 0), 0)
+  if (!(ceiling > 0) || !Number.isFinite(ceiling)) return false
+  // Any non-finite amount means the batch state is corrupt — never "match".
+  if (amounts.some((a) => !Number.isFinite(a))) return false
+  const sum = amounts.reduce((s, a) => s + (a > 0 ? a : 0), 0)
   // Match within eps% of ceiling (same tolerance family as 100% lock).
   return Math.abs(sum - ceiling) <= Math.max(ceiling * (eps / 100), 1e-6)
 }
@@ -418,32 +422,35 @@ export function calculateSoap(input: SoapInput): SoapResult {
   let insWeight = 0
 
   for (const line of input.oils) {
-    if (!line.oilId || line.amount <= 0) continue
+    // Reject non-finite / non-positive amounts (NaN, Infinity, negatives, zero).
+    // `amount <= 0` alone is false for NaN, which previously poisoned totals.
+    if (!line.oilId || !Number.isFinite(line.amount) || line.amount <= 0) continue
     const oil: Oil | undefined = getOil(line.oilId)
     if (!oil) {
       warnings.push(`Unknown oil id: ${line.oilId}`)
       continue
     }
-    totalOils += line.amount
+    const amount = line.amount
+    totalOils += amount
     // NaOH: 100% purity (industrial grade). KOH: NaOH SAP × 1.4027 (MW ratio),
     // then ÷ 0.9 — commercial KOH for liquid soap is ~90% pure (soapcalc default).
     const sap =
       input.lyeType === 'naoh' ? oil.sapNaoh : (oil.sapNaoh * KOH_FACTOR) / KOH_PURITY
-    pureLye += line.amount * sap
+    pureLye += amount * sap
     breakdown.push({
       oilId: oil.id,
       name: oil.name,
-      amount: line.amount,
+      amount,
       pct: 0,
       sapUsed: sap,
     })
     if (oil.iodine != null) {
-      iodineSum += oil.iodine * line.amount
-      iodineWeight += line.amount
+      iodineSum += oil.iodine * amount
+      iodineWeight += amount
     }
     if (oil.ins != null) {
-      insSum += oil.ins * line.amount
-      insWeight += line.amount
+      insSum += oil.ins * amount
+      insWeight += amount
     }
   }
 
@@ -473,7 +480,7 @@ export function calculateSoap(input: SoapInput): SoapResult {
 
   // Additives — weights are in the recipe unit; usage is checked as % of total oils.
   const additives: AdditiveResultLine[] = (input.additives ?? [])
-    .filter((a) => a.additiveId && a.amount > 0)
+    .filter((a) => a.additiveId && Number.isFinite(a.amount) && a.amount > 0)
     .map((a) => {
       const add = getAdditive(a.additiveId)
       const pctOfOils = totalOils > 0 ? (a.amount / totalOils) * 100 : 0
@@ -514,27 +521,31 @@ export function calculateSoap(input: SoapInput): SoapResult {
     )
   }
 
-  const sf = Math.max(0, Math.min(20, input.superfatPct)) / 100
+  // Clamp helpers: Math.min/max with NaN return NaN and poison the batch.
+  const clamp = (n: number, lo: number, hi: number, fallback: number) =>
+    Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : fallback
+
+  const sf = clamp(input.superfatPct, 0, 20, 5) / 100
   // Superfat discounts the oil-saponification lye only; the citric-acid
   // compensation is added full-strength on top (the acid is not an oil).
   const lyeWithSuperfat = pureLye * (1 - sf) + citricLyeComp
 
   let water = 0
   if (input.waterMethod === 'percent_oils') {
-    const pct = Math.max(20, Math.min(45, input.waterAsPercentOfOils)) / 100
+    const pct = clamp(input.waterAsPercentOfOils, 20, 45, 33) / 100
     water = totalOils * pct
   } else if (input.waterMethod === 'lye_concentration') {
-    const conc = Math.max(25, Math.min(50, input.lyeConcentrationPct)) / 100
+    const conc = clamp(input.lyeConcentrationPct, 25, 50, 33) / 100
     // concentration = lye / (lye + water) → water = lye * (1-c)/c
     water = lyeWithSuperfat * ((1 - conc) / conc)
   } else {
     // discount from classic ~38% of oils water
     const full = totalOils * 0.38
-    const disc = Math.max(0, Math.min(40, input.waterDiscountPct)) / 100
+    const disc = clamp(input.waterDiscountPct, 0, 40, 0) / 100
     water = full * (1 - disc)
   }
 
-  const fragrance = totalOils * (Math.max(0, Math.min(10, input.fragrancePct)) / 100)
+  const fragrance = totalOils * (clamp(input.fragrancePct, 0, 10, 0) / 100)
   const lyeSolution = lyeWithSuperfat + water
   const additiveTotal = additives.reduce((s, a) => s + a.amount, 0)
   const totalBatch = totalOils + lyeWithSuperfat + water + fragrance + additiveTotal

@@ -581,4 +581,331 @@ async function testSharePacks() {
 }
 
 await testSharePacks()
+
+// ── ADVERSARIAL / EDGE CASES ──────────────────────────────────────────────
+// Try to break soap + candle engines with NaN, Infinity, empty, negatives,
+// unknown ids, and extreme values. All outputs must stay finite.
+
+function assertFiniteSoap(r: ReturnType<typeof calculateSoap>, label: string) {
+  for (const [k, v] of Object.entries({
+    totalOils: r.totalOils,
+    pureLye: r.pureLye,
+    lyeWithSuperfat: r.lyeWithSuperfat,
+    water: r.water,
+    fragrance: r.fragrance,
+    totalBatch: r.totalBatch,
+    lyeSolution: r.lyeSolution,
+    additiveTotal: r.additiveTotal,
+  })) {
+    assert(Number.isFinite(v as number), `${label}: ${k}=${v} not finite`)
+    assert((v as number) >= 0, `${label}: ${k}=${v} negative`)
+  }
+}
+
+function assertFiniteCandle(r: ReturnType<typeof calculateCandle>, label: string) {
+  for (const [k, v] of Object.entries({
+    totalWax: r.totalWax,
+    fragrance: r.fragrance,
+    dyeBlocks: r.dyeBlocks,
+    totalBatch: r.totalBatch,
+    'perVessel.wax': r.perVessel.wax,
+    'perVessel.fragrance': r.perVessel.fragrance,
+    'perVessel.total': r.perVessel.total,
+  })) {
+    assert(Number.isFinite(v as number), `${label}: ${k}=${v} not finite`)
+    assert((v as number) >= 0, `${label}: ${k}=${v} negative`)
+  }
+}
+
+// Empty / zero / negative oils → safe empty result
+{
+  const empty = calculateSoap({ ...defaultSoapInput(), oils: [] })
+  assertFiniteSoap(empty, 'empty oils')
+  nearly(empty.totalOils, 0)
+  assert(empty.warnings.some((w) => /oil/i.test(w)), 'empty oils warns')
+
+  const zeros = calculateSoap({
+    ...defaultSoapInput(),
+    oils: [
+      { oilId: 'olive', amount: 0 },
+      { oilId: 'coconut', amount: -50 },
+    ],
+  })
+  assertFiniteSoap(zeros, 'zero/neg oils')
+  nearly(zeros.totalOils, 0)
+}
+
+// NaN / Infinity oil amounts must not poison totals (NaN <= 0 is false!)
+{
+  const r = calculateSoap({
+    ...defaultSoapInput(),
+    unit: 'g',
+    oils: [
+      { oilId: 'olive', amount: Number.NaN },
+      { oilId: 'coconut', amount: Number.POSITIVE_INFINITY },
+      { oilId: 'palm', amount: Number.NEGATIVE_INFINITY },
+      { oilId: 'castor', amount: 100 },
+    ],
+    superfatPct: 5,
+    fragrancePct: 0,
+  })
+  assertFiniteSoap(r, 'NaN soap oils')
+  nearly(r.totalOils, 100)
+  nearly(r.pureLye, 100 * 0.128, 0.05)
+}
+
+// Unknown oil id skipped with warning; valid sibling still computes
+{
+  const r = calculateSoap({
+    ...defaultSoapInput(),
+    unit: 'g',
+    oils: [
+      { oilId: 'not-a-real-oil', amount: 500 },
+      { oilId: 'olive', amount: 500 },
+    ],
+    superfatPct: 0,
+    fragrancePct: 0,
+  })
+  assertFiniteSoap(r, 'unknown oil')
+  nearly(r.totalOils, 500)
+  nearly(r.pureLye, 500 * 0.135, 0.05)
+  assert(r.warnings.some((w) => /unknown oil/i.test(w)), 'unknown oil warning')
+}
+
+// NaN superfat / water / fragrance clamps fall back safely
+{
+  const r = calculateSoap({
+    ...defaultSoapInput(),
+    unit: 'g',
+    oils: [{ oilId: 'olive', amount: 1000 }],
+    superfatPct: Number.NaN,
+    waterMethod: 'percent_oils',
+    waterAsPercentOfOils: Number.NaN,
+    fragrancePct: Number.NaN,
+  })
+  assertFiniteSoap(r, 'NaN soap params')
+  // fallback SF 5%, water 33%, FO 0%
+  nearly(r.lyeWithSuperfat, 135 * 0.95, 0.05)
+  nearly(r.water, 330, 0.1)
+  nearly(r.fragrance, 0)
+}
+
+// Extreme clamps: SF/water/FO outside legal range stay clamped, finite
+{
+  const r = calculateSoap({
+    ...defaultSoapInput(),
+    unit: 'g',
+    oils: [{ oilId: 'olive', amount: 1000 }],
+    superfatPct: 999,
+    waterMethod: 'percent_oils',
+    waterAsPercentOfOils: 999,
+    fragrancePct: 999,
+  })
+  assertFiniteSoap(r, 'extreme soap clamps')
+  nearly(r.lyeWithSuperfat, 135 * 0.8, 0.05) // SF capped 20%
+  nearly(r.water, 450, 0.1) // water % capped 45
+  nearly(r.fragrance, 100, 0.1) // FO capped 10%
+}
+
+// Lye concentration with NaN conc → fallback 33%
+{
+  const r = calculateSoap({
+    ...defaultSoapInput(),
+    unit: 'g',
+    oils: [{ oilId: 'olive', amount: 1000 }],
+    superfatPct: 0,
+    fragrancePct: 0,
+    waterMethod: 'lye_concentration',
+    lyeConcentrationPct: Number.NaN,
+  })
+  assertFiniteSoap(r, 'NaN lye conc')
+  nearly(r.water, 135 * (0.67 / 0.33), 0.2)
+}
+
+// NaN / zero / negative additives ignored; citric NaN does not inflate lye
+{
+  const base = calculateSoap({
+    ...defaultSoapInput(),
+    unit: 'g',
+    oils: [{ oilId: 'olive', amount: 1000 }],
+    superfatPct: 0,
+    fragrancePct: 0,
+  })
+  const r = calculateSoap({
+    ...defaultSoapInput(),
+    unit: 'g',
+    oils: [{ oilId: 'olive', amount: 1000 }],
+    superfatPct: 0,
+    fragrancePct: 0,
+    additives: [
+      { additiveId: 'citric-acid', amount: Number.NaN },
+      { additiveId: 'honey', amount: -10 },
+      { additiveId: 'kaolin', amount: 0 },
+      { additiveId: 'colloidal-oats', amount: 20 },
+    ],
+  })
+  assertFiniteSoap(r, 'NaN additives')
+  nearly(r.pureLye, base.pureLye, 0.05)
+  nearly(r.additiveTotal, 20, 0.05)
+}
+
+// convertWeight with NaN stays non-throwing
+{
+  assert(Number.isNaN(convertWeight(Number.NaN, 'g', 'oz')), 'NaN convert stays NaN')
+  nearly(convertWeight(0, 'lb', 'g'), 0)
+  nearly(convertWeight(-100, 'g', 'oz'), convertWeight(-100, 'g', 'oz')) // passthrough finite
+}
+
+// Percent helpers with garbage
+{
+  nearly(pctOfCeiling(Number.NaN, 1000), 0)
+  nearly(pctOfCeiling(100, 0), 0)
+  nearly(amountFromCeilingPct(Number.NaN, 1000), 0)
+  nearly(amountFromCeilingPct(50, -1), 0)
+  const oils = oilsFromPercents(Number.NaN, [{ oilId: 'olive', pct: 100 }])
+  nearly(oils[0].amount, 0)
+  assert(!weightsMatchCeiling([Number.NaN, 500], 500), 'NaN amounts fail ceiling')
+  assert(isPercentTotalLocked(Number.NaN) === false, 'NaN pct sum not locked')
+}
+
+// Candle: NaN / zero / negative wax
+{
+  const zero = calculateCandle({
+    ...defaultCandleInput(),
+    waxPerVessel: 0,
+    useTotalWax: false,
+    vesselCount: 4,
+  })
+  assertFiniteCandle(zero, 'zero wax')
+  nearly(zero.totalWax, 0)
+  assert(zero.warnings.length > 0, 'zero wax warns')
+
+  const nanWax = calculateCandle({
+    ...defaultCandleInput(),
+    useTotalWax: true,
+    totalWax: Number.NaN,
+    fragrancePct: 8,
+  })
+  assertFiniteCandle(nanWax, 'NaN total wax')
+  nearly(nanWax.totalWax, 0)
+
+  const infWax = calculateCandle({
+    ...defaultCandleInput(),
+    useTotalWax: false,
+    waxPerVessel: Number.POSITIVE_INFINITY,
+    vesselCount: 2,
+  })
+  assertFiniteCandle(infWax, 'Inf wax per vessel')
+  nearly(infWax.totalWax, 0)
+}
+
+// Candle: NaN vessel count / FO / dye / diameter
+{
+  const r = calculateCandle({
+    ...defaultCandleInput(),
+    vesselCount: Number.NaN,
+    waxPerVessel: 100,
+    useTotalWax: false,
+    fragrancePct: Number.NaN,
+    dyeBlocksPerLb: Number.NaN,
+    vesselDiameterIn: Number.NaN,
+    unit: 'g',
+  })
+  assertFiniteCandle(r, 'NaN candle params')
+  nearly(r.totalWax, 100) // count falls back to 1
+  nearly(r.fragrance, 0)
+  nearly(r.dyeBlocks, 0)
+  assert(r.wickHint.toLowerCase().includes('diameter') || r.wickHint.length > 0, 'wick hint ok')
+
+  const negCount = calculateCandle({
+    ...defaultCandleInput(),
+    vesselCount: -3,
+    waxPerVessel: 50,
+    useTotalWax: false,
+    unit: 'g',
+  })
+  assertFiniteCandle(negCount, 'neg vessel count')
+  nearly(negCount.totalWax, 50) // floor(-3)||1 → 1
+}
+
+// Candle FO clamp 0–15; extreme FO stays finite
+{
+  const hi = calculateCandle({
+    ...defaultCandleInput(),
+    useTotalWax: true,
+    totalWax: 1000,
+    fragrancePct: 999,
+    unit: 'g',
+  })
+  assertFiniteCandle(hi, 'extreme FO')
+  nearly(hi.fragrance, 150) // 15% of 1000
+  assert(hi.warnings.some((w) => /exceeds/i.test(w)), 'high FO warning')
+
+  const lo = calculateCandle({
+    ...defaultCandleInput(),
+    useTotalWax: true,
+    totalWax: 1000,
+    fragrancePct: -5,
+    unit: 'g',
+  })
+  assertFiniteCandle(lo, 'neg FO')
+  nearly(lo.fragrance, 0)
+}
+
+// suggestWick edge diameters
+{
+  assert(suggestWick(0, null).length > 0, 'd=0 hint')
+  assert(suggestWick(-1, null).length > 0, 'd=-1 hint')
+  assert(suggestWick(Number.NaN, null).length > 0, 'd=NaN hint')
+  assert(suggestWick(10, null).toLowerCase().includes('multi'), 'wide jar multi-wick')
+}
+
+// Import adversarial payloads
+{
+  const { parseSharePayload } = await import('./storage')
+  assert(!parseSharePayload('').ok, 'empty payload')
+  assert(!parseSharePayload('null').ok, 'json null')
+  assert(!parseSharePayload('[]').ok, 'empty array')
+  assert(!parseSharePayload('{"format":"alex-craft-calc-recipe","soap":[],"candle":[]}').ok, 'empty pack')
+  assert(!parseSharePayload(JSON.stringify({ name: 'x', oils: 'nope', lyeType: 'naoh' })).ok, 'bad oils type')
+  // Soap with NaN amount rejected by isSoapRecipe
+  assert(
+    !parseSharePayload(
+      JSON.stringify({
+        name: 'Bad',
+        oils: [{ oilId: 'olive', amount: null }],
+        lyeType: 'naoh',
+        superfatPct: 5,
+        waterMethod: 'percent_oils',
+        unit: 'g',
+      }),
+    ).ok,
+    'null oil amount rejected',
+  )
+  // Prototype pollution style keys must not crash
+  const proto = parseSharePayload(
+    JSON.stringify({
+      format: 'alex-craft-calc-recipe',
+      version: 1,
+      kind: 'soap',
+      soap: [
+        {
+          name: 'Ok',
+          oils: [{ oilId: 'olive', amount: 100 }],
+          lyeType: 'naoh',
+          superfatPct: 5,
+          waterMethod: 'percent_oils',
+          waterAsPercentOfOils: 33,
+          lyeConcentrationPct: 33,
+          waterDiscountPct: 0,
+          fragrancePct: 0,
+          unit: 'g',
+          __proto__: { polluted: true },
+        },
+      ],
+    }),
+  )
+  assert(proto.ok, 'proto key soap still parses')
+}
+
 console.log('All calc tests passed.')

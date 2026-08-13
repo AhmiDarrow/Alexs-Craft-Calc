@@ -55,16 +55,18 @@ export function fromOz(valueOz: number, unit: WeightUnit): number {
 export function calculateCandle(input: CandleInput): CandleResult {
   const warnings: string[] = []
   const wax = getWax(input.waxId) ?? null
-  const count = Math.max(1, Math.floor(input.vesselCount) || 1)
+  const rawCount = Number.isFinite(input.vesselCount) ? input.vesselCount : 1
+  const count = Math.max(1, Math.floor(rawCount) || 1)
 
   let totalWax = 0
   if (input.useTotalWax) {
-    totalWax = Math.max(0, input.totalWax)
+    totalWax = Number.isFinite(input.totalWax) ? Math.max(0, input.totalWax) : 0
   } else {
-    totalWax = Math.max(0, input.waxPerVessel) * count
+    const per = Number.isFinite(input.waxPerVessel) ? Math.max(0, input.waxPerVessel) : 0
+    totalWax = per * count
   }
 
-  if (totalWax <= 0) {
+  if (!Number.isFinite(totalWax) || totalWax <= 0) {
     return {
       wax,
       totalWax: 0,
@@ -78,7 +80,7 @@ export function calculateCandle(input: CandleInput): CandleResult {
     }
   }
 
-  let foPct = input.fragrancePct
+  let foPct = Number.isFinite(input.fragrancePct) ? input.fragrancePct : 0
   if (wax) {
     if (foPct < wax.fragranceMin) {
       warnings.push(
@@ -99,7 +101,8 @@ export function calculateCandle(input: CandleInput): CandleResult {
   // Dye: user-defined blocks per lb of wax
   const totalOz = toOz(totalWax, input.unit)
   const lbs = totalOz / 16
-  const dyeBlocks = round(lbs * Math.max(0, input.dyeBlocksPerLb), 2)
+  const dyePerLb = Number.isFinite(input.dyeBlocksPerLb) ? Math.max(0, input.dyeBlocksPerLb) : 0
+  const dyeBlocks = round(lbs * dyePerLb, 2)
 
   const perWax = totalWax / count
   const perFo = fragrance / count
@@ -132,7 +135,7 @@ export function calculateCandle(input: CandleInput): CandleResult {
 
 /** Rough single-wick guidance by jar diameter (inches). Not a substitute for testing. */
 export function suggestWick(diameterIn: number, wax: Wax | null): string {
-  if (!diameterIn || diameterIn <= 0) {
+  if (!Number.isFinite(diameterIn) || diameterIn <= 0) {
     return 'Set vessel diameter for a rough single-wick starting point (always test burn).'
   }
   const d = diameterIn
