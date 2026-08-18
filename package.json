@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.9",
   "type": "module",
-  "description": "Alex's Craft Calc — Alien Purple soap & candle calculator, Windows desktop + Android",
+  "description": "Alex's Craft Calc — soap + candle calculator (cold-process lye, wax & FO, craft wiki). Offline Windows, Android & PWA.",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
