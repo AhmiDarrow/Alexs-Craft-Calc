@@ -29,16 +29,12 @@ import {
 import {
   copyText,
   currentSoapSnapshot,
-  deleteSoapRecipe,
   formatSavedAt,
-  listSoapRecipes,
-  loadRecipesFromFile,
   RECIPE_FILE_ACCEPT,
-  saveSoapRecipe,
-  shareLibrary,
-  shareSoapRecipe,
   type SavedSoapRecipe,
 } from '../lib/storage'
+import { escapeHtml } from '../lib/htmlEscape'
+import { useSoapRecipeIO } from '../hooks/useSoapRecipeIO'
 
 type OilRow = {
   key: string
@@ -173,11 +169,19 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
   const [recipeName, setRecipeName] = useState('')
   const [recipeNotes, setRecipeNotes] = useState('')
   const [additiveRows, setAdditiveRows] = useState<AdditiveRow[]>([])
-  /** Stable library slot while editing a loaded/saved recipe (enables overwrite-by-id). */
-  const [activeRecipeId, setActiveRecipeId] = useState<string | null>(null)
-  const [saved, setSaved] = useState<SavedSoapRecipe[]>(() => listSoapRecipes())
-  const [showSaved, setShowSaved] = useState(false)
   const importRef = useRef<HTMLInputElement>(null)
+  const {
+    saved,
+    showSaved,
+    setShowSaved,
+    activeRecipeId,
+    setActiveRecipeId,
+    persistSave,
+    removeSaved,
+    loadFromFile,
+    shareOne,
+    shareAll,
+  } = useSoapRecipeIO(onToast)
 
   const u = unitLabel(unit)
 
@@ -567,10 +571,8 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
   }
 
   function handleSave() {
-    const name = recipeName.trim() || 'Soap ' + new Date().toLocaleDateString()
-    const { recipe, write, overwritten } = saveSoapRecipe({
-      id: activeRecipeId || undefined,
-      name,
+    const recipe = persistSave({
+      name: recipeName.trim() || 'Soap ' + new Date().toLocaleDateString(),
       oils: snapshotOils(),
       lyeType,
       superfatPct: parseFloat(superfatPct) || 0,
@@ -585,14 +587,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
       notes: recipeNotes.trim() || undefined,
       additives: snapshotAdditives(),
     })
-    if (!write.ok) {
-      onToast?.(write.error)
-      return
-    }
-    setActiveRecipeId(recipe.id)
-    setRecipeName(recipe.name)
-    setSaved(listSoapRecipes())
-    onToast?.(overwritten ? `Updated “${recipe.name}”` : `Saved “${recipe.name}”`)
+    if (recipe) setRecipeName(recipe.name)
   }
 
   function loadRecipe(r: SavedSoapRecipe) {
@@ -671,14 +666,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
   }
 
   function handleDelete(id: string) {
-    const write = deleteSoapRecipe(id)
-    if (!write.ok) {
-      onToast?.(write.error)
-      return
-    }
-    if (activeRecipeId === id) setActiveRecipeId(null)
-    setSaved(listSoapRecipes())
-    onToast?.('Recipe deleted')
+    removeSaved(id)
   }
 
   const currentSoapRecipe = useCallback((): SavedSoapRecipe => {
@@ -825,7 +813,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
       '</style></head><body>' +
       "<h1>Alex's Craft Calc — Soap</h1>" +
       '<pre>' +
-      formatRecipeText().replace(/</g, '&lt;') +
+      escapeHtml(formatRecipeText()) +
       '</pre>' +
       '<p class="note">Craft planning only. Verify SAP values. Lye is caustic.</p>' +
       '<script>onload=()=>{print();}</script>' +
@@ -838,12 +826,8 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
   async function handleLoadFile(file: File | null) {
     if (!file) return
     try {
-      const result = await loadRecipesFromFile(file)
-      setSaved(listSoapRecipes())
-      if (!result.ok) {
-        onToast?.(result.error)
-        return
-      }
+      const result = await loadFromFile(file)
+      if (!result) return
       const { parsed, merged, summary } = result
       if (
         merged.lastSoap &&
@@ -861,17 +845,12 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
 
   /** Share current recipe via OS share sheet (phone) or download (desktop). */
   async function handleShare() {
-    const recipe = currentSoapRecipe()
-    const result = await shareSoapRecipe(recipe, formatRecipeText())
-    if (result.mode === 'cancelled') return
-    onToast?.(result.message)
+    await shareOne(currentSoapRecipe(), formatRecipeText())
   }
 
   /** Share full soap+candle library backup (long-press Share or saved-list action). */
   async function handleShareLibrary() {
-    const result = await shareLibrary()
-    if (result.mode === 'cancelled') return
-    onToast?.(result.message)
+    await shareAll()
   }
 
   const recipeBalanced = pctOk && weightsOk && parsedTotalOils > 0

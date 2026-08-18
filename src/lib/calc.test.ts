@@ -908,4 +908,111 @@ function assertFiniteCandle(r: ReturnType<typeof calculateCandle>, label: string
   assert(proto.ok, 'proto key soap still parses')
 }
 
+// escapeHtml covers &, <, >, quotes for print sheets
+{
+  const { escapeHtml } = await import('./htmlEscape')
+  assert(escapeHtml('a < b & c > d') === 'a &lt; b &amp; c &gt; d', 'escape entities')
+  assert(escapeHtml(`say "hi" 'there'`) === 'say &quot;hi&quot; &#39;there&#39;', 'escape quotes')
+  assert(escapeHtml('') === '', 'empty escape')
+}
+
+// Name-collision probes + save-by-name overwrite behavior (memory localStorage shim)
+{
+  const store = new Map<string, string>()
+  const ls: Storage = {
+    get length() {
+      return store.size
+    },
+    clear() {
+      store.clear()
+    },
+    getItem(k: string) {
+      return store.has(k) ? store.get(k)! : null
+    },
+    key(i: number) {
+      return [...store.keys()][i] ?? null
+    },
+    removeItem(k: string) {
+      store.delete(k)
+    },
+    setItem(k: string, v: string) {
+      store.set(k, String(v))
+    },
+  }
+  // storage helpers read localStorage / window.localStorage — keep both in sync
+  const g = globalThis as unknown as {
+    localStorage: Storage
+    window: { localStorage: Storage }
+  }
+  g.localStorage = ls
+  g.window = { localStorage: ls }
+
+  const {
+    saveSoapRecipe,
+    soapNameCollision,
+    candleNameCollision,
+    saveCandleRecipe,
+    listSoapRecipes,
+    listCandleRecipes,
+    deleteSoapRecipe,
+    deleteCandleRecipe,
+  } = await import('./storage')
+
+  store.clear()
+  const first = saveSoapRecipe({
+    name: 'Everyday Bar',
+    oils: [{ oilId: 'olive', amount: 100 }],
+    lyeType: 'naoh',
+    superfatPct: 5,
+    waterMethod: 'percent_oils',
+    waterAsPercentOfOils: 33,
+    lyeConcentrationPct: 33,
+    waterDiscountPct: 0,
+    fragrancePct: 3,
+    unit: 'g',
+  })
+  assert(first.write.ok, 'first soap save ok')
+  assert(!first.overwritten, 'first soap is insert')
+  assert(soapNameCollision('Everyday Bar')?.id === first.recipe.id, 'collision finds name')
+  assert(soapNameCollision('Everyday Bar', first.recipe.id) === undefined, 'same id not a collision')
+  assert(soapNameCollision('everyday bar')?.id === first.recipe.id, 'collision is case-insensitive')
+
+  const second = saveSoapRecipe({
+    name: 'everyday bar',
+    oils: [{ oilId: 'coconut', amount: 200 }],
+    lyeType: 'naoh',
+    superfatPct: 5,
+    waterMethod: 'percent_oils',
+    waterAsPercentOfOils: 33,
+    lyeConcentrationPct: 33,
+    waterDiscountPct: 0,
+    fragrancePct: 3,
+    unit: 'g',
+  })
+  assert(second.write.ok && second.overwritten, 'name match overwrites')
+  assert(second.recipe.id === first.recipe.id, 'overwrite keeps id')
+  assert(listSoapRecipes().length === 1, 'still one soap slot')
+  assert(listSoapRecipes()[0].oils[0].oilId === 'coconut', 'oils updated')
+
+  const c1 = saveCandleRecipe({
+    name: 'Soy Run',
+    waxId: 'soy-111',
+    vesselCount: 4,
+    waxPerVessel: 200,
+    useTotalWax: false,
+    totalWax: 800,
+    fragrancePct: 8,
+    dyeBlocksPerLb: 1,
+    unit: 'g',
+    vesselDiameterIn: 3,
+  })
+  assert(c1.write.ok, 'candle save ok')
+  assert(candleNameCollision('soy run')?.id === c1.recipe.id, 'candle collision')
+  assert(candleNameCollision('Soy Run', c1.recipe.id) === undefined, 'candle same id ok')
+
+  deleteSoapRecipe(first.recipe.id)
+  deleteCandleRecipe(c1.recipe.id)
+  assert(listSoapRecipes().length === 0 && listCandleRecipes().length === 0, 'cleanup')
+}
+
 console.log('All calc tests passed.')

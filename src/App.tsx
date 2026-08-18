@@ -94,7 +94,7 @@ export default function App() {
       <header className="app-header">
         <div className="brand">
           <img
-            src="/brand-soap.png"
+            src="./brand-soap.png"
             alt=""
             className="brand-mark"
             width={44}
@@ -104,7 +104,7 @@ export default function App() {
               // Fall back to SVG mark, then initials
               if (!el.dataset.fallback) {
                 el.dataset.fallback = '1'
-                el.src = '/brand-mark.svg'
+                el.src = './brand-mark.svg'
                 return
               }
               el.style.display = 'none'
@@ -136,7 +136,7 @@ export default function App() {
       </header>
 
       <div className="hero-strip" aria-hidden>
-        <img src="/banner-art.png" alt="" className="hero-banner" />
+        <img src="./banner-art.png" alt="" className="hero-banner" />
       </div>
 
       <main

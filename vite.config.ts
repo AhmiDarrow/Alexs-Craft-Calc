@@ -27,8 +27,8 @@ export default defineConfig({
         background_color: '#0a0614',
         display: 'standalone',
         orientation: 'any',
-        start_url: '/',
-        scope: '/',
+        start_url: './',
+        scope: './',
         categories: ['utilities', 'lifestyle'],
         icons: [
           {
@@ -57,7 +57,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}'],
-        navigateFallback: '/index.html',
+        navigateFallback: 'index.html',
       },
       devOptions: {
         enabled: false,

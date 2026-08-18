@@ -10,16 +10,12 @@ import {
 import {
   copyText,
   currentCandleSnapshot,
-  deleteCandleRecipe,
   formatSavedAt,
-  listCandleRecipes,
-  loadRecipesFromFile,
   RECIPE_FILE_ACCEPT,
-  saveCandleRecipe,
-  shareCandleRecipe,
-  shareLibrary,
   type SavedCandleRecipe,
 } from '../lib/storage'
+import { escapeHtml } from '../lib/htmlEscape'
+import { useCandleRecipeIO } from '../hooks/useCandleRecipeIO'
 import { waxWikiId } from './Wiki'
 
 interface CandleCalculatorProps {
@@ -40,11 +36,19 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
   const [vesselPresetId, setVesselPresetId] = useState('custom')
   const [recipeName, setRecipeName] = useState('')
   const [recipeNotes, setRecipeNotes] = useState('')
-  /** Stable library slot while editing a loaded/saved recipe (enables overwrite-by-id). */
-  const [activeRecipeId, setActiveRecipeId] = useState<string | null>(null)
-  const [saved, setSaved] = useState<SavedCandleRecipe[]>(() => listCandleRecipes())
-  const [showSaved, setShowSaved] = useState(false)
   const importRef = useRef<HTMLInputElement>(null)
+  const {
+    saved,
+    showSaved,
+    setShowSaved,
+    activeRecipeId,
+    setActiveRecipeId,
+    persistSave,
+    removeSaved,
+    loadFromFile,
+    shareOne,
+    shareAll,
+  } = useCandleRecipeIO(onToast)
 
   const selectedWax = getWax(waxId)
 
@@ -74,8 +78,6 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
   )
 
   const result = useMemo(() => calculateCandle(input), [input])
-
-  const refreshSaved = useCallback(() => setSaved(listCandleRecipes()), [])
 
   function onWaxChange(id: string) {
     setWaxId(id)
@@ -135,10 +137,8 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
   }
 
   function handleSave() {
-    const name = recipeName.trim() || `${selectedWax?.name || 'Candle'} ×${vesselCount}`
-    const { recipe, write, overwritten } = saveCandleRecipe({
-      id: activeRecipeId || undefined,
-      name,
+    const recipe = persistSave({
+      name: recipeName.trim() || `${selectedWax?.name || 'Candle'} ×${vesselCount}`,
       waxId,
       vesselCount: parseInt(vesselCount, 10) || 1,
       waxPerVessel: parseFloat(waxPerVessel) || 0,
@@ -151,14 +151,7 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
       vesselPresetId,
       notes: recipeNotes.trim() || undefined,
     })
-    if (!write.ok) {
-      onToast?.(write.error)
-      return
-    }
-    setActiveRecipeId(recipe.id)
-    setRecipeName(recipe.name)
-    refreshSaved()
-    onToast?.(overwritten ? `Updated “${recipe.name}”` : `Saved “${recipe.name}”`)
+    if (recipe) setRecipeName(recipe.name)
   }
 
   function loadRecipe(r: SavedCandleRecipe) {
@@ -180,14 +173,7 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
   }
 
   function handleDelete(id: string) {
-    const write = deleteCandleRecipe(id)
-    if (!write.ok) {
-      onToast?.(write.error)
-      return
-    }
-    if (activeRecipeId === id) setActiveRecipeId(null)
-    refreshSaved()
-    onToast?.('Recipe deleted')
+    removeSaved(id)
   }
 
   const currentCandleRecipe = useCallback((): SavedCandleRecipe => {
@@ -277,7 +263,7 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
       '</style></head><body>' +
       "<h1>Alex's Craft Calc — Candle</h1>" +
       '<pre>' +
-      formatRecipeText().replace(/</g, '&lt;') +
+      escapeHtml(formatRecipeText()) +
       '</pre>' +
       '<p class="note">Craft planning only. Verify FO limits and wick with test burns.</p>' +
       '<script>onload=()=>{print();}</script>' +
@@ -290,12 +276,8 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
   async function handleLoadFile(file: File | null) {
     if (!file) return
     try {
-      const result = await loadRecipesFromFile(file)
-      refreshSaved()
-      if (!result.ok) {
-        onToast?.(result.error)
-        return
-      }
+      const result = await loadFromFile(file)
+      if (!result) return
       const { parsed, merged, summary } = result
       if (
         merged.lastCandle &&
@@ -313,17 +295,12 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
 
   /** Share current recipe via OS share sheet (phone) or download (desktop). */
   async function handleShare() {
-    const recipe = currentCandleRecipe()
-    const result = await shareCandleRecipe(recipe, formatRecipeText())
-    if (result.mode === 'cancelled') return
-    onToast?.(result.message)
+    await shareOne(currentCandleRecipe(), formatRecipeText())
   }
 
   /** Share full soap+candle library backup (long-press Share or saved-list action). */
   async function handleShareLibrary() {
-    const result = await shareLibrary()
-    if (result.mode === 'cancelled') return
-    onToast?.(result.message)
+    await shareAll()
   }
 
   function setFoTypical() {

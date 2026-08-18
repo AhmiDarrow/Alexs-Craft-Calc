@@ -4,6 +4,21 @@ All notable changes to **Alex's Craft Calc** are documented here.
 
 ## [Unreleased]
 
+## [1.0.9] — 2026-08-18
+
+### Fixed
+- **Relative asset URLs** — brand mark, banner, and PWA `start_url`/`scope` use `./` so Tauri/Capacitor `file://` and non-root bases load images correctly
+- **Print sheets** — recipe text is fully HTML-escaped (`&`, `<`, `>`, quotes) before `document.write`
+- **Save name collision** — saving without an active slot that matches an existing recipe name asks before overwrite
+- **Tauri CSP** — tight default CSP instead of `null` (self + ipc + inline styles for the app shell)
+
+### Improved
+- **Recipe helpers** — `escapeHtml`, name-collision probes, and candle/soap recipe hooks extracted for smaller calculator surfaces
+- **releases/README** aligned to current version; removed stray root `$null` artifact
+
+### Tests
+- Coverage for `escapeHtml` and save name-collision / overwrite behavior
+
 ## [1.0.8] — 2026-08-13
 
 ### Fixed

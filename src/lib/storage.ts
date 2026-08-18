@@ -204,6 +204,29 @@ export function getCandleRecipe(id: string): SavedCandleRecipe | undefined {
 }
 
 /**
+ * True when Save would clobber another library slot by name alone
+ * (no active id, or id not found, but a different recipe already uses this name).
+ */
+export function soapNameCollision(name: string, activeId?: string | null): SavedSoapRecipe | undefined {
+  const nameKey = (name || '').trim().toLowerCase()
+  if (!nameKey) return undefined
+  return listSoapRecipes().find(
+    (r) => r.name.trim().toLowerCase() === nameKey && (!activeId || r.id !== activeId),
+  )
+}
+
+export function candleNameCollision(
+  name: string,
+  activeId?: string | null,
+): SavedCandleRecipe | undefined {
+  const nameKey = (name || '').trim().toLowerCase()
+  if (!nameKey) return undefined
+  return listCandleRecipes().find(
+    (r) => r.name.trim().toLowerCase() === nameKey && (!activeId || r.id !== activeId),
+  )
+}
+
+/**
  * Save soap recipe.
  * - If `id` matches an existing recipe → update that slot (stable id).
  * - Else if same name (case-insensitive) exists → overwrite that slot, keep its id.
