@@ -1,7 +1,6 @@
-# Tag v* -> GitHub Release with Windows (Tauri MSI/NSIS) + Android (debug APK)
+# Tag v* -> GitHub Release with Windows (Tauri MSI/NSIS) + Android debug APK
 # Usage: git tag v1.2.3 && git push origin v1.2.3
-# Needs only the default Actions token. Debug APK is intentional for sideload;
-# release-signed APK can be added later via secrets.
+# Needs only the default Actions token. Debug APK is intentional for sideload.
 name: Release
 
 on:
@@ -64,20 +63,9 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG already exists — will upload/replace assets"
           else
-            NOTES="## Alex's Craft Calc $TAG
-
-Windows desktop (Tauri MSI + NSIS) and Android APK built by GitHub Actions on this tag.
-
-See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for notes.
-
-### Install
-- **Windows:** download the `.msi` installer (or NSIS setup)
-- **Android:** download the `-debug.apk` and sideload (debug-signed; fine for personal use)
-- **PWA:** build `dist/` locally or host static files — no native binary required
-"
             gh release create "$TAG" \
               --title "Alex's Craft Calc $TAG" \
-              --notes "$NOTES" \
+              --generate-notes \
               --verify-tag
           fi
 
@@ -176,8 +164,7 @@ See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGEL
       - name: Upload APK to release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ needs.prepare.outputs.tag }}
+          TAG: ${{ steps.meta.outputs.tag }}
         shell: bash
         run: |
           gh release upload "$TAG" "${{ steps.apk.outputs.path }}" --clobber
-
