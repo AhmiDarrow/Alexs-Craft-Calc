@@ -57,7 +57,7 @@ jobs:
 
       - name: Ensure GitHub Release exists
         env:
-          GH_TOKEN: {{ github.token }}
+          GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.meta.outputs.tag }}
         shell: bash
         run: |
@@ -110,7 +110,7 @@ See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGEL
       - name: Build Tauri (MSI + NSIS) and upload
         uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: {{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         with:
           projectPath: .
           tagName: ${{ needs.prepare.outputs.tag }}
@@ -175,7 +175,7 @@ See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGEL
 
       - name: Upload APK to release
         env:
-          GH_TOKEN: {{ github.token }}
+          GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.prepare.outputs.tag }}
         shell: bash
         run: |
