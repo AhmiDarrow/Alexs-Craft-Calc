@@ -1,6 +1,7 @@
-# Tag v* -> GitHub Release with Windows (Tauri MSI/NSIS) + Android debug APK
+# Tag v* -> GitHub Release with Windows (Tauri MSI) + Android debug APK
 # Usage: git tag v1.2.3 && git push origin v1.2.3
 # Needs only the default Actions token. Debug APK is intentional for sideload.
+# Windows: MSI only (NSIS fails on apostrophe in productName "Alex's Craft Calc").
 name: Release
 
 on:
@@ -70,7 +71,7 @@ jobs:
           fi
 
   windows:
-    name: Windows (Tauri)
+    name: Windows (Tauri MSI)
     needs: prepare
     runs-on: windows-latest
     timeout-minutes: 90
@@ -95,7 +96,7 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build Tauri (MSI + NSIS) and upload
+      - name: Build Tauri (MSI) and upload
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -106,7 +107,8 @@ jobs:
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: false
-          args: --bundles msi,nsis
+          # MSI only — NSIS fails on apostrophe in productName "Alex's Craft Calc"
+          args: --bundles msi
 
   android:
     name: Android (APK)
