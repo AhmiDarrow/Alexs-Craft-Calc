@@ -1,0 +1,183 @@
+# Tag v* -> GitHub Release with Windows (Tauri MSI/NSIS) + Android (debug APK)
+# Usage: git tag v1.2.3 && git push origin v1.2.3
+# Needs only the default Actions token. Debug APK is intentional for sideload;
+# release-signed APK can be added later via secrets.
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build (e.g. v1.0.9). Leave empty to use the ref tag.'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  prepare:
+    name: Prepare release
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tag
+        id: meta
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.tag }}" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          case "$TAG" in
+            v*) ;;
+            *) echo "Tag must look like v1.2.3 (got: $TAG)" >&2; exit 1 ;;
+          esac
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building release for $TAG ($VERSION)"
+
+      - name: Ensure GitHub Release exists
+        env:
+          GH_TOKEN: {{ github.token }}
+          TAG: ${{ steps.meta.outputs.tag }}
+        shell: bash
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists — will upload/replace assets"
+          else
+            NOTES="## Alex's Craft Calc $TAG
+
+Windows desktop (Tauri MSI + NSIS) and Android APK built by GitHub Actions on this tag.
+
+See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for notes.
+
+### Install
+- **Windows:** download the `.msi` installer (or NSIS setup)
+- **Android:** download the `-debug.apk` and sideload (debug-signed; fine for personal use)
+- **PWA:** build `dist/` locally or host static files — no native binary required
+"
+            gh release create "$TAG" \
+              --title "Alex's Craft Calc $TAG" \
+              --notes "$NOTES" \
+              --verify-tag
+          fi
+
+  windows:
+    name: Windows (Tauri)
+    needs: prepare
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build Tauri (MSI + NSIS) and upload
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: {{ github.token }}
+        with:
+          projectPath: .
+          tagName: ${{ needs.prepare.outputs.tag }}
+          releaseName: "Alex's Craft Calc ${{ needs.prepare.outputs.tag }}"
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: false
+          args: --bundles msi,nsis
+
+  android:
+    name: Android (APK)
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install platform + build-tools
+        shell: bash
+        run: |
+          sdkmanager --install "platforms;android-36" "build-tools;35.0.0" "platform-tools"
+          yes | sdkmanager --licenses >/dev/null || true
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build web + sync Capacitor
+        run: |
+          npm run build
+          npx cap sync android
+
+      - name: Assemble debug APK
+        working-directory: android
+        run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
+
+      - name: Stage APK asset
+        id: apk
+        shell: bash
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          SRC="android/app/build/outputs/apk/debug/app-debug.apk"
+          DEST="Alexs-Craft-Calc-${VERSION}-debug.apk"
+          test -f "$SRC"
+          cp "$SRC" "$DEST"
+          echo "path=$DEST" >> "$GITHUB_OUTPUT"
+          ls -lh "$DEST"
+
+      - name: Upload APK to release
+        env:
+          GH_TOKEN: {{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        shell: bash
+        run: |
+          gh release upload "$TAG" "${{ steps.apk.outputs.path }}" --clobber
+

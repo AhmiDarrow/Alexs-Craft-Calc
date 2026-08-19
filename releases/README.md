@@ -1,21 +1,32 @@
-# Local release artifacts
+# Release artifacts
 
-Built on this machine for everyday install. Binaries are gitignored; GitHub Releases carry the public downloads.
-
-Current app version: **1.0.9** (see root `package.json` / `src-tauri/tauri.conf.json`).
-
-| File | What |
-|------|------|
-| `Alexs-Craft-Calc.exe` | Portable Windows desktop (Tauri) |
-| `Alexs-Craft-Calc-1.0.9-x64.msi` | Windows installer (latest) |
-| `Alexs-Craft-Calc-1.0.9-debug.apk` | Android debug APK (sideload, latest) |
-| `Alexs-Craft-Calc-1.0.x-*.msi` / `*-debug.apk` | Prior local builds kept for rollback |
-
-Rebuild:
+**Preferred path:** push a version tag and let GitHub Actions build + attach installers.
 
 ```bash
-npm run tauri:build
-npm run android:apk
+# versions aligned in package.json + src-tauri/* + android/app/build.gradle
+git tag v1.0.9
+git push origin v1.0.9
 ```
 
-Copy fresh artifacts into this folder after a release build if you want them on disk next to the README.
+Workflow: [`.github/workflows/release.yml`](../.github/workflows/release.yml)
+
+| Trigger | What you get on the GitHub Release |
+|---------|-------------------------------------|
+| `git push origin v*` | Windows MSI + NSIS (Tauri) · Android debug APK |
+| PR / push to `main` | CI only (tests + typecheck) — [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) |
+
+Assets land on: https://github.com/AhmiDarrow/Alexs-Craft-Calc/releases
+
+## Local builds (optional)
+
+Only needed if you want binaries without waiting on CI, or to debug packaging.
+
+| Artifact | Command | Typical output |
+|----------|---------|----------------|
+| Windows EXE / MSI | `npm run tauri:build` | `src-tauri/target/release/` + `bundle/msi`, `bundle/nsis` |
+| Android debug APK | `npm run android:apk` | `android/app/build/outputs/apk/debug/app-debug.apk` |
+| Web / PWA | `npm run build` | `dist/` |
+
+Copy into this folder only for local stash — **do not commit binaries** (see root `.gitignore`). Publish via the tag release pipeline.
+
+Current app version: **1.0.9**

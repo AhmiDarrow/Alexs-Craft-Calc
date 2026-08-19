@@ -4,6 +4,14 @@ All notable changes to **Alex's Craft Calc** are documented here.
 
 ## [Unreleased]
 
+### Added
+- **GitHub Actions release pipeline** — tag `v*` builds Windows (Tauri MSI/NSIS) + Android debug APK and uploads them to the GitHub Release (no local installer build required)
+- **CI workflow** — `npm test` + `tsc -b` on every PR and push to `main`
+
+### Changed
+- Android `versionName` / `versionCode` aligned to **1.0.9** / `9`
+- Docs: README + `releases/README` describe tag → CI → assets instead of hand-built installers
+
 ## [1.0.9] — 2026-08-18
 
 ### Fixed

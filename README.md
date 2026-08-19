@@ -127,42 +127,41 @@ npm test
 2. Safari/Chrome → **Add to Home Screen**
 3. Tap **?** or **F1 / Wiki** for the knowledge base.
 
-## Native builds
+## Releases (CI)
 
-### Windows desktop (Tauri)
+Installers are built **on GitHub**, not on your laptop.
 
-Requires Rust + MSVC Build Tools + WebView2.
+```bash
+# bump version in package.json + src-tauri + android/app/build.gradle, then:
+git tag v1.0.9
+git push origin v1.0.9
+```
+
+| Workflow | When | Output |
+|----------|------|--------|
+| [CI](.github/workflows/ci.yml) | PR / push to `main` | `npm test` + typecheck |
+| [Release](.github/workflows/release.yml) | tag `v*` (or manual dispatch) | Windows MSI/NSIS + Android debug APK on the [GitHub Release](https://github.com/AhmiDarrow/Alexs-Craft-Calc/releases) |
+
+Re-run a tag build anytime: **Actions → Release → Run workflow** (pass the tag, e.g. `v1.0.9`).
+
+### Local native builds (optional)
+
+Only if you need to debug packaging offline.
+
+**Windows (Tauri)** — Rust + MSVC Build Tools + WebView2:
 
 ```bash
 npm install
 npm run tauri:build
 ```
 
-Outputs:
-
-- `src-tauri/target/release/alexs-craft-calc.exe` — portable desktop app
-- `src-tauri/target/release/bundle/msi/*_x64_en-US.msi` — installer
-
-Packaged copies may also live under `releases/` (see `releases/README.md`).
-
-### Android APK (Capacitor)
-
-Requires **JDK 21**, Android SDK (`platform-tools`, `platforms;android-35+`, `build-tools`).
-
-```bash
-npm run build
-npx cap sync android
-cd android
-./gradlew assembleDebug          # Windows: gradlew.bat assembleDebug
-```
-
-Or one-shot on Windows:
+**Android (Capacitor)** — JDK 21 + Android SDK:
 
 ```bash
 npm run android:apk
 ```
 
-APK: `android/app/build/outputs/apk/debug/app-debug.apk` (debug-signed — fine for personal use).
+See [`releases/README.md`](./releases/README.md) for paths and notes.
 
 ## Project layout
 
