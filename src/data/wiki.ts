@@ -293,7 +293,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
       },
       {
         heading: 'Reading the additive table',
-        body: 'Each additive in the catalog lists a typical % of oils (e.g. kaolin 0.5–3%), a bench-side spoon measure per pound of oils (PPO), when to add it, what it does, and cautions. Enter a weight in your unit and the app shows you the live % of oils and whether you are inside the range.',
+        body: 'Each additive in the catalog lists a typical % of oils (e.g. kaolin 0.5–3%), a bench-side spoon measure per pound of oils (PPO), when to add it, what it does, and cautions. Enter an amount by weight (g/oz/lb) or by spoon (tsp/tbsp); the row shows the PPO guidance, phase, live % of oils, and whether you are inside the range. Spoon weights are approximate — powders pack differently, so weigh when precision matters.',
       },
       {
         heading: 'Exfoliants: ground oats',

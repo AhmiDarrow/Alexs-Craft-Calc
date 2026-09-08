@@ -4,13 +4,24 @@ All notable changes to **Alex's Craft Calc** are documented here.
 
 ## [Unreleased]
 
+## [1.0.10] — 2026-09-08
+
 ### Added
-- **GitHub Actions release pipeline** — tag `v*` builds Windows (Tauri MSI/NSIS) + Android debug APK and uploads them to the GitHub Release (no local installer build required)
+- **Additive spoon units** — enter additives in tsp/tbsp (as well as g/oz/lb); approximate per-additive densities convert to recipe weight
+- Per-row **PPO / phase / % of oils** guidance under each additive
+- **GitHub Actions release pipeline** — tag `v*` builds Windows (Tauri MSI) + Android debug APK and uploads them to the GitHub Release
 - **CI workflow** — `npm test` + `tsc -b` on every PR and push to `main`
 
+### Fixed
+- **Mobile additives layout** — usage status and guidance were pushed off-screen (status sat in the 28px remove column)
+- Results additive lines wrap instead of overflowing on narrow screens
+
 ### Changed
-- Android `versionName` / `versionCode` aligned to **1.0.9** / `9`
-- Docs: README + `releases/README` describe tag → CI → assets instead of hand-built installers
+- Android `versionName` / `versionCode` → **1.0.10** / `10`
+- Docs: README + `releases/README` describe tag → CI → assets
+
+### Tests
+- Spoon ↔ weight conversion and spoon entry through `calculateSoap`
 
 ## [1.0.9] — 2026-08-18
 

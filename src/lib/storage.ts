@@ -29,8 +29,15 @@ export interface SavedSoapRecipe {
   totalOilsWeight?: number
   /** Free-form maker notes / custom recipe field */
   notes?: string
-  /** Add-ins: ground oats, clays, milks, etc. (weight in the recipe unit) */
-  additives?: { additiveId: string; amount: number }[]
+  /**
+   * Add-ins: ground oats, clays, milks, etc.
+   * `amount` is in `amountUnit` when set (g/oz/lb/tsp/tbsp); otherwise recipe `unit`.
+   */
+  additives?: {
+    additiveId: string
+    amount: number
+    amountUnit?: 'g' | 'oz' | 'lb' | 'tsp' | 'tbsp'
+  }[]
 }
 
 export interface SavedCandleRecipe {
@@ -97,14 +104,24 @@ function isSoapRecipe(v: unknown): v is SavedSoapRecipe {
   if (
     v.additives !== undefined &&
     (!Array.isArray(v.additives) ||
-      !v.additives.every(
-        (a) =>
-          isRecord(a) &&
-          typeof a.additiveId === 'string' &&
-          a.additiveId.length > 0 &&
-          typeof a.amount === 'number' &&
-          Number.isFinite(a.amount),
-      ))
+      !v.additives.every((a) => {
+        if (
+          !isRecord(a) ||
+          typeof a.additiveId !== 'string' ||
+          a.additiveId.length === 0 ||
+          typeof a.amount !== 'number' ||
+          !Number.isFinite(a.amount)
+        )
+          return false
+        if (a.amountUnit === undefined) return true
+        return (
+          a.amountUnit === 'g' ||
+          a.amountUnit === 'oz' ||
+          a.amountUnit === 'lb' ||
+          a.amountUnit === 'tsp' ||
+          a.amountUnit === 'tbsp'
+        )
+      }))
   )
     return false
   return v.oils.every(
@@ -399,7 +416,21 @@ function normalizeSoap(r: SavedSoapRecipe, forceNewId = true): SavedSoapRecipe {
         Number.isFinite(a.amount) &&
         a.amount > 0,
     )
-    .map((a) => ({ additiveId: a.additiveId.slice(0, 60), amount: a.amount }))
+    .map((a) => {
+      const amountUnit =
+        a.amountUnit === 'g' ||
+        a.amountUnit === 'oz' ||
+        a.amountUnit === 'lb' ||
+        a.amountUnit === 'tsp' ||
+        a.amountUnit === 'tbsp'
+          ? a.amountUnit
+          : undefined
+      return {
+        additiveId: a.additiveId.slice(0, 60),
+        amount: a.amount,
+        ...(amountUnit ? { amountUnit } : {}),
+      }
+    })
   const id =
     !forceNewId && typeof r.id === 'string' && r.id.trim()
       ? r.id.trim().slice(0, 80)

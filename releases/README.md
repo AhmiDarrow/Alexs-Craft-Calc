@@ -4,8 +4,8 @@
 
 ```bash
 # versions aligned in package.json + src-tauri/* + android/app/build.gradle
-git tag v1.0.9
-git push origin v1.0.9
+git tag v1.0.10
+git push origin v1.0.10
 ```
 
 Workflow: [`.github/workflows/release.yml`](../.github/workflows/release.yml)
@@ -29,4 +29,4 @@ Only needed if you want binaries without waiting on CI, or to debug packaging.
 
 Copy into this folder only for local stash — **do not commit binaries** (see root `.gitignore`). Publish via the tag release pipeline.
 
-Current app version: **1.0.9**
+Current app version: **1.0.10**

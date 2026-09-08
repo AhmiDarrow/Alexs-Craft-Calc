@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/AhmiDarrow/Alexs-Craft-Calc/releases/tag/v1.0.9"><img alt="version" src="https://img.shields.io/badge/version-1.0.9-a855f7?style=for-the-badge" /></a>
+  <a href="https://github.com/AhmiDarrow/Alexs-Craft-Calc/releases/tag/v1.0.10"><img alt="version" src="https://img.shields.io/badge/version-1.0.10-a855f7?style=for-the-badge" /></a>
   <a href="#safety"><img alt="offline" src="https://img.shields.io/badge/runs-offline-0f172a?style=for-the-badge" /></a>
   <a href="#native-builds"><img alt="platforms" src="https://img.shields.io/badge/Windows%20·%20Android%20·%20PWA-1e1b4b?style=for-the-badge" /></a>
   <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/local%20first-no%20account-312e81?style=for-the-badge" /></a>
@@ -133,7 +133,7 @@ Installers are built **on GitHub**, not on your laptop.
 
 ```bash
 # bump version in package.json + src-tauri + android/app/build.gradle, then:
-git tag v1.0.9
+git tag v1.0.10
 git push origin v1.0.9
 ```
 

@@ -1,8 +1,10 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { OILS, getOil } from '../data/oils'
 import {
+  additiveAmountInRecipeUnit,
   amountFromCeilingPct,
   calculateSoap,
+  convertAdditiveAmountUnit,
   convertWeight,
   defaultSoapInput,
   emptyLockedResult,
@@ -14,6 +16,7 @@ import {
   weightsMatchCeiling,
   computeQualityProfile,
   computeSatRatio,
+  type AdditiveAmountUnit,
   type LyeType,
   type OilLine,
   type SoapInput,
@@ -25,6 +28,7 @@ import {
   ADDITIVE_CATEGORY_LABELS,
   additiveUsageStatus,
   getAdditive,
+  isAdditiveVolumeUnit,
 } from '../data/additives'
 import {
   copyText,
@@ -47,6 +51,8 @@ type AdditiveRow = {
   key: string
   additiveId: string
   amount: string
+  /** Entry unit for amount — weight (g/oz/lb) or kitchen spoon (tsp/tbsp). */
+  amountUnit: AdditiveAmountUnit
 }
 
 const PRESETS: { name: string; oils: OilLine[] }[] = [
@@ -145,6 +151,16 @@ function unitLabel(u: SoapUnit): string {
   return 'lb'
 }
 
+function parseAdditiveAmountUnit(
+  value: string | undefined,
+  fallback: SoapUnit,
+): AdditiveAmountUnit {
+  if (value === 'g' || value === 'oz' || value === 'lb' || value === 'tsp' || value === 'tbsp') {
+    return value
+  }
+  return fallback
+}
+
 interface SoapCalculatorProps {
   onOpenWiki?: (articleId?: string) => void
   onToast?: (msg: string) => void
@@ -234,7 +250,15 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
       unit,
       additives: additiveRows
         .filter((r) => r.additiveId && (parseFloat(r.amount) || 0) > 0)
-        .map((r) => ({ additiveId: r.additiveId, amount: parseFloat(r.amount) || 0 })),
+        .map((r) => ({
+          additiveId: r.additiveId,
+          amount: additiveAmountInRecipeUnit(
+            parseFloat(r.amount) || 0,
+            r.amountUnit,
+            unit,
+            r.additiveId,
+          ),
+        })),
     }),
     [
       resolvedOils,
@@ -366,16 +390,42 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
         key: uid(),
         additiveId,
         amount: '',
+        amountUnit: unit,
       },
     ])
   }
 
   function updateAdditiveId(key: string, additiveId: string) {
-    setAdditiveRows((prev) => prev.map((r) => (r.key === key ? { ...r, additiveId } : r)))
+    setAdditiveRows((prev) =>
+      prev.map((r) => {
+        if (r.key !== key) return r
+        // Keep the typed amount; if switching between spoon-capable additives the
+        // spoon→weight factor changes with gPerTsp, which is intentional.
+        return { ...r, additiveId }
+      }),
+    )
   }
 
   function updateAdditiveAmount(key: string, amountStr: string) {
     setAdditiveRows((prev) => prev.map((r) => (r.key === key ? { ...r, amount: amountStr } : r)))
+  }
+
+  function updateAdditiveAmountUnit(key: string, nextUnit: AdditiveAmountUnit) {
+    setAdditiveRows((prev) =>
+      prev.map((r) => {
+        if (r.key !== key || r.amountUnit === nextUnit) return r
+        const n = parseFloat(r.amount)
+        if (!Number.isFinite(n) || r.amount.trim() === '') {
+          return { ...r, amountUnit: nextUnit }
+        }
+        const converted = convertAdditiveAmountUnit(n, r.amountUnit, nextUnit, r.additiveId)
+        return {
+          ...r,
+          amountUnit: nextUnit,
+          amount: fmtNum(converted, nextUnit === 'tsp' || nextUnit === 'tbsp' ? 3 : 4),
+        }
+      }),
+    )
   }
 
   function removeAdditiveRow(key: string) {
@@ -537,12 +587,19 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
         }
       }),
     )
-    // Additives are stored in the recipe unit too — convert with oils/ceiling.
+    // Weight-entered additives convert with the recipe unit; spoon amounts stay put.
     setAdditiveRows((prev) =>
       prev.map((r) => {
+        if (isAdditiveVolumeUnit(r.amountUnit)) return r
         const n = parseFloat(r.amount)
-        if (!Number.isFinite(n) || r.amount.trim() === '') return r
-        return { ...r, amount: fmtNum(convertWeight(n, unit, next), 4) }
+        if (!Number.isFinite(n) || r.amount.trim() === '') {
+          return { ...r, amountUnit: next }
+        }
+        return {
+          ...r,
+          amountUnit: next,
+          amount: fmtNum(convertWeight(n, r.amountUnit as SoapUnit, next), 4),
+        }
       }),
     )
     if (nextCeiling > 0) {
@@ -567,6 +624,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
       .map((r) => ({
         additiveId: r.additiveId,
         amount: parseFloat(r.amount) || 0,
+        amountUnit: r.amountUnit,
       }))
   }
 
@@ -658,6 +716,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
         key: uid(),
         additiveId: a.additiveId,
         amount: String(a.amount),
+        amountUnit: parseAdditiveAmountUnit(a.amountUnit, nextUnit),
       })),
     )
     setActiveRecipeId(r.id)
@@ -751,7 +810,21 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
               .map((r) => {
                 const add = getAdditive(r.additiveId)
                 const amt = parseFloat(r.amount) || 0
-                return '  • ' + (add?.name || r.additiveId) + ': ' + fmtNum(amt, 4) + ' ' + u
+                const entry = r.amountUnit
+                const asRecipe = additiveAmountInRecipeUnit(amt, r.amountUnit, unit, r.additiveId)
+                const spoonNote =
+                  isAdditiveVolumeUnit(r.amountUnit) && asRecipe > 0
+                    ? ` (≈ ${fmtNum(asRecipe, 3)} ${u})`
+                    : ''
+                return (
+                  '  • ' +
+                  (add?.name || r.additiveId) +
+                  ': ' +
+                  fmtNum(amt, 4) +
+                  ' ' +
+                  entry +
+                  spoonNote
+                )
               }),
           ]
         : []),
@@ -779,6 +852,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
   }, [
     recipeName,
     u,
+    unit,
     lyeType,
     superfatPct,
     fragrancePct,
@@ -1193,9 +1267,9 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
           </button>
         </div>
         <p className="hint">
-          Ground oats, clays, milks, salts, sugars, botanicals — weighed in {u}, checked as % of
-          oils. Amounts are added to your batch total; anything outside the recommended range is
-          flagged in results.
+          Ground oats, clays, milks, salts, sugars, botanicals — enter by weight ({u}) or spoon
+          (tsp/tbsp). Usage is checked as % of oils; amounts add to your batch total. Spoon
+          weights are approximate (powder packing varies).
         </p>
         {additiveRows.length === 0 && (
           <p className="hint">None yet — pick an additive below (colloidal oats, kaolin, honey…).</p>
@@ -1203,17 +1277,38 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
         {additiveRows.map((row) => {
           const add = getAdditive(row.additiveId)
           const amt = parseFloat(row.amount) || 0
-          const pctOfOils = parsedTotalOils > 0 && amt > 0 ? (amt / parsedTotalOils) * 100 : 0
+          const amtInRecipe =
+            row.additiveId && amt > 0
+              ? additiveAmountInRecipeUnit(amt, row.amountUnit, unit, row.additiveId)
+              : 0
+          const pctOfOils =
+            parsedTotalOils > 0 && amtInRecipe > 0 ? (amtInRecipe / parsedTotalOils) * 100 : 0
           const usage = add ? additiveUsageStatus(pctOfOils, add.usagePct) : 'n/a'
           const usageCls = usage === 'good' ? 'ok' : usage
           const usageLabel =
             usage === 'good'
               ? `OK · ${add!.usagePct.min}–${add!.usagePct.max}%`
               : usage === 'low'
-                ? `Low · need ${add!.usagePct.min}–${add!.usagePct.max}%`
+                ? `Low · ${add!.usagePct.min}–${add!.usagePct.max}%`
                 : usage === 'high'
                   ? `High · max ${add!.usagePct.max}%`
                   : '—'
+          const usageTitle =
+            usage === 'good'
+              ? `Within recommended ${add!.usagePct.min}–${add!.usagePct.max}% of oils`
+              : usage === 'low'
+                ? `Below recommended ${add!.usagePct.min}–${add!.usagePct.max}% of oils`
+                : usage === 'high'
+                  ? `Above recommended ${add!.usagePct.min}–${add!.usagePct.max}% of oils`
+                  : 'Enter an amount to check usage'
+          const metaBits = [
+            add?.ppo ? `${add.ppo} PPO` : null,
+            add?.phase || null,
+            amtInRecipe > 0 && isAdditiveVolumeUnit(row.amountUnit)
+              ? `≈ ${fmtNum(amtInRecipe, 3)} ${u}`
+              : null,
+            pctOfOils > 0 ? `${fmtNum(pctOfOils, 2)}% of oils` : null,
+          ].filter(Boolean)
           return (
             <div className="additive-row" key={row.key}>
               <div className="additive-select-wrap">
@@ -1256,9 +1351,25 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
                   aria-label={'Amount ' + (add?.name || '')}
                   placeholder="0"
                 />
-                <span className="pct-suffix">{u}</span>
+                <select
+                  className="additive-unit-select"
+                  value={row.amountUnit}
+                  onChange={(e) =>
+                    updateAdditiveAmountUnit(row.key, e.target.value as AdditiveAmountUnit)
+                  }
+                  aria-label={'Unit for ' + (add?.name || 'additive')}
+                >
+                  <option value={unit}>{unitLabel(unit)}</option>
+                  {unit !== 'g' && <option value="g">g</option>}
+                  {unit !== 'oz' && <option value="oz">oz</option>}
+                  {unit !== 'lb' && <option value="lb">lb</option>}
+                  <option value="tsp">tsp</option>
+                  <option value="tbsp">tbsp</option>
+                </select>
               </div>
-              <span className={'additive-status ' + usageCls}>{usageLabel}</span>
+              <span className={'additive-status ' + usageCls} title={usageTitle}>
+                {usageLabel}
+              </span>
               <button
                 type="button"
                 className="icon-btn"
@@ -1267,6 +1378,11 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
               >
                 ×
               </button>
+              {metaBits.length > 0 && (
+                <p className="additive-meta" title={add?.cautions || add?.benefits || undefined}>
+                  {metaBits.join(' · ')}
+                </p>
+              )}
             </div>
           )
         })}
@@ -1570,13 +1686,22 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
                   >
                     {a.name}
                   </button>
-                  <span className={'additive-status ' + a.status}>
-                    {a.amount} {u} · {a.pctOfOils}% of oils ·{' '}
+                  <span
+                    className={'additive-status ' + a.status}
+                    title={
+                      a.status === 'ok'
+                        ? `Within ${a.usageMin}–${a.usageMax}% of oils`
+                        : a.status === 'low'
+                          ? `Below recommended ${a.usageMin}–${a.usageMax}% of oils`
+                          : `Above recommended ${a.usageMin}–${a.usageMax}% of oils`
+                    }
+                  >
+                    {a.amount} {u} · {a.pctOfOils}% ·{' '}
                     {a.status === 'ok'
-                      ? `within ${a.usageMin}–${a.usageMax}%`
+                      ? `OK ${a.usageMin}–${a.usageMax}%`
                       : a.status === 'low'
-                        ? `below recommended ${a.usageMin}–${a.usageMax}%`
-                        : `above recommended ${a.usageMin}–${a.usageMax}%`}
+                        ? `Low ${a.usageMin}–${a.usageMax}%`
+                        : `High max ${a.usageMax}%`}
                   </span>
                 </li>
               ))}

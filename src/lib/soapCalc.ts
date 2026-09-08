@@ -6,11 +6,18 @@ import {
   type FattyAcid,
   type Oil,
 } from '../data/oils'
-import { getAdditive } from '../data/additives'
+import {
+  additiveGramsPerTsp,
+  getAdditive,
+  isAdditiveVolumeUnit,
+  type AdditiveVolumeUnit,
+} from '../data/additives'
 
 export type LyeType = 'naoh' | 'koh'
 export type WaterMethod = 'percent_oils' | 'lye_concentration' | 'discount'
 export type SoapUnit = 'g' | 'oz' | 'lb'
+/** Additive entry unit: recipe weight units plus kitchen spoons. */
+export type AdditiveAmountUnit = SoapUnit | AdditiveVolumeUnit
 /** @deprecated Kept for saved-recipe compatibility; UI is always dual weight+% */
 export type OilEntryMode = 'weight' | 'percent' | 'dual'
 
@@ -311,6 +318,49 @@ export function convertWeight(value: number, from: SoapUnit, to: SoapUnit): numb
   if (from === to) return value
   if (!Number.isFinite(value)) return value
   return fromGrams(toGrams(value, from), to)
+}
+
+function isSoapUnit(u: string): u is SoapUnit {
+  return u === 'g' || u === 'oz' || u === 'lb'
+}
+
+/** Convert an additive amount (weight or spoon) into the recipe weight unit. */
+export function additiveAmountInRecipeUnit(
+  amount: number,
+  amountUnit: AdditiveAmountUnit,
+  recipeUnit: SoapUnit,
+  additiveId: string,
+): number {
+  if (!Number.isFinite(amount) || amount <= 0) return 0
+  if (isAdditiveVolumeUnit(amountUnit)) {
+    const gPerTsp = additiveGramsPerTsp(additiveId)
+    const grams = amountUnit === 'tbsp' ? amount * gPerTsp * 3 : amount * gPerTsp
+    return convertWeight(grams, 'g', recipeUnit)
+  }
+  if (isSoapUnit(amountUnit)) {
+    return convertWeight(amount, amountUnit, recipeUnit)
+  }
+  return 0
+}
+
+/** Convert a displayed additive amount between entry units (keeps mass constant). */
+export function convertAdditiveAmountUnit(
+  amount: number,
+  from: AdditiveAmountUnit,
+  to: AdditiveAmountUnit,
+  additiveId: string,
+): number {
+  if (!Number.isFinite(amount)) return amount
+  if (from === to) return amount
+  const grams = isAdditiveVolumeUnit(from)
+    ? amount * additiveGramsPerTsp(additiveId) * (from === 'tbsp' ? 3 : 1)
+    : toGrams(amount, from)
+  if (isAdditiveVolumeUnit(to)) {
+    const gPerTsp = additiveGramsPerTsp(additiveId)
+    const denom = gPerTsp * (to === 'tbsp' ? 3 : 1)
+    return denom > 0 ? grams / denom : 0
+  }
+  return fromGrams(grams, to)
 }
 
 export function sumOilPercents(pcts: number[]): number {

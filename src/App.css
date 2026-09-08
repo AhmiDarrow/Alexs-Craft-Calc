@@ -746,6 +746,41 @@ label select:focus,
   color: var(--alien-bright);
 }
 
+.breakdown ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.breakdown li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid rgba(186, 120, 255, 0.12);
+  min-width: 0;
+}
+
+.breakdown li > span {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.breakdown li .additive-status {
+  white-space: normal;
+  display: inline-block;
+  line-height: 1.35;
+}
+
 .breakdown table {
   width: 100%;
   border-collapse: collapse;
@@ -902,13 +937,18 @@ label select:focus,
 
 .additive-row {
   display: grid;
-  grid-template-columns: minmax(160px, 1fr) 110px auto 28px;
-  gap: 0.5rem;
+  grid-template-columns: minmax(140px, 1fr) minmax(132px, 168px) auto 36px;
+  grid-template-areas:
+    'select amount status remove'
+    'meta meta meta meta';
+  gap: 0.45rem 0.5rem;
   align-items: center;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.65rem;
+  min-width: 0;
 }
 
 .additive-select-wrap {
+  grid-area: select;
   display: flex;
   align-items: center;
   gap: 0.35rem;
@@ -921,18 +961,34 @@ label select:focus,
 }
 
 .additive-amount-wrap {
-  display: flex;
+  grid-area: amount;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.additive-unit-select {
+  width: auto;
+  min-width: 4.4rem;
+  max-width: 5.5rem;
+  padding: 0.45rem 1.6rem 0.45rem 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .additive-status {
+  grid-area: status;
   font-size: 0.72rem;
   font-weight: 650;
   white-space: nowrap;
   padding: 0.18rem 0.5rem;
   border-radius: 999px;
   border: 1px solid transparent;
+  justify-self: start;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .additive-status.ok {
@@ -958,6 +1014,23 @@ label select:focus,
   background: rgba(255, 255, 255, 0.06);
 }
 
+.additive-meta {
+  grid-area: meta;
+  margin: 0;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.additive-row .icon-btn {
+  grid-area: remove;
+  justify-self: end;
+}
+
 .additive-table-footer {
   display: flex;
   align-items: center;
@@ -968,31 +1041,38 @@ label select:focus,
 
 .additive-add-select {
   max-width: 320px;
+  min-width: 0;
+  flex: 1 1 180px;
 }
 
 .additives-card .hint {
   margin-top: 0;
+  margin-bottom: 0.75rem;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 640px) {
   .additive-row {
-    grid-template-columns: 1fr 28px;
+    grid-template-columns: minmax(0, 1fr) 36px;
     grid-template-areas:
       'select remove'
-      'amount status';
-  }
-  .additive-select-wrap {
-    grid-area: select;
-  }
-  .additive-amount-wrap {
-    grid-area: amount;
+      'amount amount'
+      'status status'
+      'meta meta';
   }
   .additive-status {
-    grid-area: status;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
     justify-self: start;
+    width: fit-content;
+    max-width: 100%;
   }
-  .additive-row .icon-btn {
-    grid-area: remove;
+  .additive-amount-wrap {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .additive-unit-select {
+    min-width: 4.6rem;
   }
 }
 

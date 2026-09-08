@@ -1,7 +1,7 @@
 {
   "name": "alexs-craft-calc",
   "private": true,
-  "version": "1.0.9",
+  "version": "1.0.10",
   "type": "module",
   "description": "Alex's Craft Calc — soap + candle calculator (cold-process lye, wax & FO, craft wiki). Offline Windows, Android & PWA.",
   "scripts": {

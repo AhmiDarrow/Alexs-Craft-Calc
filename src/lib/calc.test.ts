@@ -1,6 +1,8 @@
 import {
+  additiveAmountInRecipeUnit,
   amountFromCeilingPct,
   calculateSoap,
+  convertAdditiveAmountUnit,
   convertWeight,
   defaultSoapInput,
   emptyLockedResult,
@@ -12,6 +14,7 @@ import {
   weightsMatchCeiling,
 } from './soapCalc'
 import { calculateCandle, defaultCandleInput, suggestWick } from './candleCalc'
+import { additiveGramsPerTsp } from '../data/additives'
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(msg)
@@ -131,6 +134,39 @@ function nearly(a: number, b: number, eps = 0.05) {
   nearly(convertWeight(1, 'lb', 'oz'), 16, 0.0001)
   nearly(convertWeight(16, 'oz', 'g'), 453.59237, 0.01)
   nearly(convertWeight(1000, 'g', 'g'), 1000)
+}
+
+// Additive spoon measures ↔ weight (kaolin 2.8 g/tsp; tbsp = 3 tsp)
+{
+  nearly(additiveGramsPerTsp('kaolin'), 2.8, 0.001)
+  nearly(additiveAmountInRecipeUnit(1, 'tsp', 'g', 'kaolin'), 2.8, 0.001)
+  nearly(additiveAmountInRecipeUnit(1, 'tbsp', 'g', 'kaolin'), 8.4, 0.001)
+  nearly(additiveAmountInRecipeUnit(1, 'tbsp', 'oz', 'kaolin'), 8.4 / 28.349523125, 0.001)
+  nearly(convertAdditiveAmountUnit(1, 'tbsp', 'tsp', 'kaolin'), 3, 0.001)
+  nearly(convertAdditiveAmountUnit(2.8, 'g', 'tsp', 'kaolin'), 1, 0.001)
+  // Honey is denser than clay — same tbsp is more grams
+  assert(
+    additiveAmountInRecipeUnit(1, 'tbsp', 'g', 'honey') >
+      additiveAmountInRecipeUnit(1, 'tbsp', 'g', 'kaolin'),
+    'honey tbsp heavier than kaolin tbsp',
+  )
+  // Spoon entry through calculateSoap: 1 tbsp oats @ 2.5 g/tsp → 7.5 g on 1000 g oils = 0.75%
+  const spoonBatch = calculateSoap({
+    ...defaultSoapInput(),
+    unit: 'g',
+    oils: [{ oilId: 'olive', amount: 1000 }],
+    superfatPct: 5,
+    fragrancePct: 0,
+    additives: [
+      {
+        additiveId: 'colloidal-oats',
+        amount: additiveAmountInRecipeUnit(1, 'tbsp', 'g', 'colloidal-oats'),
+      },
+    ],
+  })
+  nearly(spoonBatch.additives[0]?.amount ?? 0, 7.5, 0.05)
+  nearly(spoonBatch.additives[0]?.pctOfOils ?? 0, 0.75, 0.05)
+  assert(spoonBatch.additives[0]?.status === 'low', '1 tbsp oats is below 1–4% on a 1 kg batch')
 }
 
 // Percent ↔ weight helpers + 100% lock gate + ceiling model

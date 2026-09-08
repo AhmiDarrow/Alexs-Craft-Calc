@@ -39,6 +39,11 @@ export interface Additive {
   usagePct: { min: number; max: number }
   /** Quick spoon measure per pound of oils (≈454 g), for bench-side measuring. */
   ppo?: string
+  /**
+   * Approximate grams per level US teaspoon (for tsp/tbsp entry).
+   * Powders vary by grind and packing — treat spoon weights as guidance, not lab-precise.
+   */
+  gPerTsp?: number
   /** When to add during the process. */
   phase: string
   /** What it does in the finished bar. */
@@ -52,6 +57,12 @@ export interface Additive {
   wiki: string
 }
 
+/** Fallback when an additive has no gPerTsp (≈ water density). */
+export const DEFAULT_G_PER_TSP = 5
+
+/** Volume entry units for additives (weight units live on SoapUnit). */
+export type AdditiveVolumeUnit = 'tsp' | 'tbsp'
+
 export const ADDITIVES: Additive[] = [
   {
     id: 'colloidal-oats',
@@ -59,6 +70,7 @@ export const ADDITIVES: Additive[] = [
     category: 'exfoliant',
     usagePct: { min: 1, max: 4 },
     ppo: '1–3 tbsp',
+    gPerTsp: 2.5,
     phase: 'At trace',
     benefits:
       'Gentle exfoliation plus soothing skin feel — beta-glucan in oats calms itchy, dry, or sensitive skin and leaves a creamy, soft bar.',
@@ -73,6 +85,7 @@ export const ADDITIVES: Additive[] = [
     category: 'clay',
     usagePct: { min: 0.5, max: 3 },
     ppo: '1–2 tsp',
+    gPerTsp: 2.8,
     phase: 'At trace (or dispersed in oil)',
     benefits:
       'Silky, slippery bar with a smooth glide. Gentle for sensitive skin, reduces the “drag” of a plain bar, and helps lighten or brighten colors.',
@@ -86,6 +99,7 @@ export const ADDITIVES: Additive[] = [
     category: 'clay',
     usagePct: { min: 0.5, max: 3 },
     ppo: '1–2 tsp',
+    gPerTsp: 2.5,
     phase: 'At trace',
     benefits:
       'Draw-out, “detox” feel with a creamy lather — a favorite in oily-skin and mud-style bars.',
@@ -100,6 +114,7 @@ export const ADDITIVES: Additive[] = [
     category: 'clay',
     usagePct: { min: 0.5, max: 3 },
     ppo: '1–2 tsp',
+    gPerTsp: 2.5,
     phase: 'At trace',
     benefits:
       'Gentle detox with a soft sage-green tint — good for oily and combination skin bars.',
@@ -113,6 +128,7 @@ export const ADDITIVES: Additive[] = [
     category: 'clay',
     usagePct: { min: 0.5, max: 3 },
     ppo: '1–2 tsp',
+    gPerTsp: 2.5,
     phase: 'At trace',
     benefits:
       'Silky, slip-rich bar with real draw-out power — beloved for oily skin and a luxurious feel.',
@@ -126,6 +142,7 @@ export const ADDITIVES: Additive[] = [
     category: 'clay',
     usagePct: { min: 0.5, max: 3 },
     ppo: '1–2 tsp',
+    gPerTsp: 2.5,
     phase: 'At trace',
     benefits: 'Soft blush-pink tint with kaolin’s gentle, silky feel.',
     cautions: 'Natural pink can fade or shift in lye; test.',
@@ -137,6 +154,7 @@ export const ADDITIVES: Additive[] = [
     category: 'colorant',
     usagePct: { min: 0.3, max: 1.5 },
     ppo: '¼–1 tsp',
+    gPerTsp: 1.2,
     phase: 'At trace (sift first)',
     benefits:
       'Deep black colorant with a draw-out feel — the signature of “detox” bars.',
@@ -151,6 +169,7 @@ export const ADDITIVES: Additive[] = [
     category: 'liquid',
     usagePct: { min: 0.5, max: 5 },
     ppo: '1 tsp–1 tbsp',
+    gPerTsp: 7,
     phase: 'At trace (dissolved first)',
     benefits:
       'Humectant that draws moisture to skin, boosts bubbles, and adds a subtle golden tint and mild scent.',
@@ -165,6 +184,7 @@ export const ADDITIVES: Additive[] = [
     category: 'liquid',
     usagePct: { min: 0.5, max: 2 },
     ppo: '1 tsp',
+    gPerTsp: 4.2,
     phase: 'Dissolved in lye water',
     benefits: 'Boosts rich, stable lather — especially helpful in high-oleic (castile-style) bars.',
     cautions: 'Sugar in lye water heats up; dissolve in water before the lye or add to cooled lye water.',
@@ -177,6 +197,7 @@ export const ADDITIVES: Additive[] = [
     category: 'other',
     usagePct: { min: 1, max: 3 },
     ppo: '1 tsp',
+    gPerTsp: 5.5,
     phase: 'Added to cooled lye solution',
     benefits:
       'Hardens bars noticeably, speeds unmolding, and gives cleaner cuts — a lifesaver for high-soft-oil recipes.',
@@ -189,6 +210,7 @@ export const ADDITIVES: Additive[] = [
     category: 'salt',
     usagePct: { min: 1, max: 4 },
     ppo: '1–2 tbsp',
+    gPerTsp: 6,
     phase: 'Dissolved in water (brine) or at trace',
     benefits:
       'Hardens the bar and produces a dense, creamy lather — the heart of classic brine and salt bars.',
@@ -203,6 +225,7 @@ export const ADDITIVES: Additive[] = [
     category: 'milk',
     usagePct: { min: 2, max: 5 },
     ppo: '1 tbsp',
+    gPerTsp: 2.5,
     phase: 'Dissolved in water before lye (or at trace)',
     benefits:
       'Creamy, gentle bar with a soft lotion feel — lactic acid in milk is naturally mild on skin.',
@@ -217,6 +240,7 @@ export const ADDITIVES: Additive[] = [
     category: 'silk',
     usagePct: { min: 0.05, max: 0.2 },
     ppo: 'a pinch (¼ tsp)',
+    gPerTsp: 0.4,
     phase: 'Dissolved in lye water',
     benefits:
       'Gives bars a silky, glossy, almost powdery skin feel — the protein sericin coats the bar surface.',
@@ -230,6 +254,7 @@ export const ADDITIVES: Additive[] = [
     category: 'exfoliant',
     usagePct: { min: 1, max: 3 },
     ppo: '1–2 tbsp',
+    gPerTsp: 2,
     phase: 'At trace (or pressed into the top)',
     benefits:
       'Real exfoliation with a speckled look and a hint of coffee scent — the classic morning-scrub bar.',
@@ -242,6 +267,7 @@ export const ADDITIVES: Additive[] = [
     category: 'exfoliant',
     usagePct: { min: 0.5, max: 2 },
     ppo: '1–2 tsp',
+    gPerTsp: 2.8,
     phase: 'At trace',
     benefits: 'Gentle, uniform exfoliation with a distinctive dotted look.',
     cautions: 'Some find seeds slightly sharp; stir well or they sink unevenly.',
@@ -253,6 +279,7 @@ export const ADDITIVES: Additive[] = [
     category: 'botanical',
     usagePct: { min: 0.5, max: 2 },
     ppo: '1–2 tsp',
+    gPerTsp: 0.8,
     phase: 'At trace (or sprinkled on top)',
     benefits: 'Pretty botanical decoration with light exfoliation and a whisper of lavender.',
     cautions:
@@ -265,6 +292,7 @@ export const ADDITIVES: Additive[] = [
     category: 'botanical',
     usagePct: { min: 0.5, max: 2 },
     ppo: '1–2 tsp',
+    gPerTsp: 0.6,
     phase: 'At trace (or sprinkled on top)',
     benefits: 'Traditional soothing herb — lovely orange-gold flecks in the bar.',
     cautions: 'Petals can morph greenish in high-pH batter; test for exact color.',
@@ -276,6 +304,7 @@ export const ADDITIVES: Additive[] = [
     category: 'colorant',
     usagePct: { min: 0.2, max: 1 },
     ppo: '¼–1 tsp',
+    gPerTsp: 2.8,
     phase: 'At trace (dispersed in oil)',
     benefits:
       'Warm yellow-orange natural colorant with antioxidant curcumin — “golden milk” bars.',
@@ -289,6 +318,7 @@ export const ADDITIVES: Additive[] = [
     category: 'colorant',
     usagePct: { min: 0.2, max: 1 },
     ppo: '¼–1 tsp',
+    gPerTsp: 2,
     phase: 'At trace',
     benefits: 'Vivid natural green colorant with trace minerals and a nutrient-rich story.',
     cautions: 'Green can morph grayish or blue-green in lye; expensive — use sparingly.',
@@ -300,6 +330,7 @@ export const ADDITIVES: Additive[] = [
     category: 'chelator',
     usagePct: { min: 0.5, max: 2 },
     ppo: '1–2 tsp',
+    gPerTsp: 5,
     phase: 'Dissolved in water BEFORE the lye',
     benefits:
       'Chelating agent: binds minerals in hard water so your soap makes rich, creamy lather instead of soap scum — also helps prevent rancidity and brightens the bar.',
@@ -315,6 +346,7 @@ export const ADDITIVES: Additive[] = [
     category: 'colorant',
     usagePct: { min: 0.2, max: 1 },
     ppo: '¼–1 tsp',
+    gPerTsp: 3.5,
     phase: 'Dispersed in oil (not water)',
     benefits: 'Bright white colorant and opacifier — makes a clean white base for vivid swirls.',
     cautions: 'Disperse in oil or glycerin first; it does not mix into water. Can be slightly drying at high rates.',
@@ -326,6 +358,7 @@ export const ADDITIVES: Additive[] = [
     category: 'colorant',
     usagePct: { min: 0.1, max: 1 },
     ppo: '⅛–1 tsp',
+    gPerTsp: 2.5,
     phase: 'At trace',
     benefits: 'Shimmer, pearl, and vivid colors — the modern soapmaker’s palette.',
     cautions: 'Only use cosmetic/skin-safe mica (never craft-store mica). Some colors morph or migrate; test.',
@@ -338,6 +371,7 @@ export const ADDITIVES: Additive[] = [
     category: 'preservative',
     usagePct: { min: 0.05, max: 0.5 },
     ppo: 'a few drops (¼ tsp max)',
+    gPerTsp: 4.5,
     phase: 'Added to the oils (or at trace)',
     benefits:
       'Natural antioxidant that slows rancidity (DOS) and extends shelf life — cheap insurance for high-iodine recipes.',
@@ -348,6 +382,16 @@ export const ADDITIVES: Additive[] = [
 
 export function getAdditive(id: string): Additive | undefined {
   return ADDITIVES.find((a) => a.id === id)
+}
+
+export function isAdditiveVolumeUnit(u: string): u is AdditiveVolumeUnit {
+  return u === 'tsp' || u === 'tbsp'
+}
+
+/** Approximate grams per level tsp for an additive (or water-like default). */
+export function additiveGramsPerTsp(additiveId: string): number {
+  const g = getAdditive(additiveId)?.gPerTsp
+  return typeof g === 'number' && Number.isFinite(g) && g > 0 ? g : DEFAULT_G_PER_TSP
 }
 
 export function additiveCategoryLabel(category: AdditiveCategory): string {
