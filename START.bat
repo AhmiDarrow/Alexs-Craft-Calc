@@ -1,6 +1,6 @@
 @echo off
 title Alex's Craft Calc
-cd /d "C:\Users\Administrator\Projects\alien-craft-calc"
+cd /d "%~dp0"
 echo.
 echo   ========================================
 echo     Alex's Craft Calc  -  Alien Purple

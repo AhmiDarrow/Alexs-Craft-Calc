@@ -5,11 +5,14 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFilter
 
-SRC = Path(
-    r"C:\Users\Administrator\.remedy\attachments"
-    r"\1e953f26-d5db-4aad-9a1c-6f89a655b620\remedy_comfy_00019_.png"
-)
-PROJ = Path(r"C:\Users\Administrator\Projects\alien-craft-calc")
+PROJ = Path(__file__).resolve().parents[1]
+HOME = Path.home()
+SRC_CANDIDATES = [
+    HOME / ".remedy" / "attachments" / "1e953f26-d5db-4aad-9a1c-6f89a655b620" / "remedy_comfy_00019_.png",
+    PROJ / "public" / "icon-source.png",
+    PROJ / "app-icon.png",
+]
+SRC = next((p for p in SRC_CANDIDATES if p.is_file()), SRC_CANDIDATES[0])
 PUBLIC = PROJ / "public"
 PUBLIC.mkdir(exist_ok=True)
 
@@ -39,6 +42,8 @@ def save_size(im: Image.Image, path: Path, size: int, rounded: bool = False) -> 
 
 
 def main() -> None:
+    if not SRC.is_file():
+        raise SystemExit(f"source icon not found; tried: {SRC_CANDIDATES}")
     img = Image.open(SRC).convert("RGBA")
     w, h = img.size
     side = min(w, h)
