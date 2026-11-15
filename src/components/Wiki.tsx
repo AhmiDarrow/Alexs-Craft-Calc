@@ -9,6 +9,8 @@ import {
   type WikiCategory,
 } from '../data/wiki'
 import { getPrefs, setPrefs } from '../lib/storage'
+import { displayTag, localizeArticles } from '../i18n/content'
+import { useI18n } from '../i18n/I18nProvider'
 
 interface WikiProps {
   open: boolean
@@ -96,7 +98,12 @@ function isWikiHist(s: unknown): s is WikiHist {
 }
 
 export function Wiki({ open, onClose, initialId }: WikiProps) {
-  const articles = useMemo(() => buildFullWiki(OILS, WAXES), [])
+  const { t, intlLocale } = useI18n()
+  const englishArticles = useMemo(() => buildFullWiki(OILS, WAXES), [])
+  const localizedArticles = useMemo(
+    () => localizeArticles(t, intlLocale, englishArticles),
+    [t, intlLocale, englishArticles],
+  )
   const isMobile = useIsMobile()
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<WikiCategory | 'all'>('all')
@@ -127,11 +134,11 @@ export function Wiki({ open, onClose, initialId }: WikiProps) {
     openSeq.current += 1
     const seq = openSeq.current
     const id = initialId || getPrefs().lastWikiId || 'welcome'
-    if (articles.some((a) => a.id === id)) setActiveId(id)
+    if (englishArticles.some((a) => a.id === id)) setActiveId(id)
 
     // Deep-link / oil chip → open straight into the article on mobile.
     // Plain F1 / Wiki button → start on the full-page list.
-    const jumpIn = Boolean(initialId && articles.some((a) => a.id === initialId))
+    const jumpIn = Boolean(initialId && englishArticles.some((a) => a.id === initialId))
     setMobileView(jumpIn ? 'article' : 'list')
 
     // History stack so phone system Back: article → list → calculator (not app exit).
@@ -158,13 +165,13 @@ export function Wiki({ open, onClose, initialId }: WikiProps) {
     }
     window.addEventListener('popstate', onPop)
 
-    const t = window.setTimeout(() => {
+    const focusTimer = window.setTimeout(() => {
       if (seq !== openSeq.current) return
       if (!jumpIn) searchRef.current?.focus()
     }, 60)
 
     return () => {
-      window.clearTimeout(t)
+      window.clearTimeout(focusTimer)
       window.removeEventListener('popstate', onPop)
       // Closed via X / F1 / backdrop — drop wiki history entries without re-firing close.
       const depth = histDepthRef.current
@@ -174,7 +181,7 @@ export function Wiki({ open, onClose, initialId }: WikiProps) {
         window.history.go(-depth)
       }
     }
-  }, [open, initialId, articles, onClose])
+  }, [open, initialId, englishArticles, onClose])
 
   useEffect(() => {
     if (!open) return
@@ -208,23 +215,27 @@ export function Wiki({ open, onClose, initialId }: WikiProps) {
   }, [open, onClose, isMobile, mobileView])
 
   const filtered = useMemo(() => {
-    let list = searchWiki(articles, query)
-    if (category !== 'all') list = list.filter((a) => a.category === category)
+    const ids = new Set<string>()
+    for (const article of searchWiki(englishArticles, query)) ids.add(article.id)
+    for (const article of searchWiki(localizedArticles, query)) ids.add(article.id)
+    let list = localizedArticles.filter((article) => ids.has(article.id))
+    if (category !== 'all') list = list.filter((article) => article.category === category)
     return list
-  }, [articles, query, category])
+  }, [englishArticles, localizedArticles, query, category])
 
-  const active: WikiArticle | undefined = articles.find((a) => a.id === activeId)
+  const active: WikiArticle | undefined = localizedArticles.find((a) => a.id === activeId)
 
   // Group nav by category when not searching
   const navGroups = useMemo(() => {
     if (query.trim()) {
-      return [{ id: 'all' as const, label: 'Search results', icon: '⌕', items: filtered }]
+      return [{ id: 'all' as const, label: t('wiki.searchResults'), icon: '⌕', items: filtered }]
     }
     return WIKI_CATEGORIES.map((c) => ({
       ...c,
+      label: t(`wiki.cat.${c.id}`),
       items: filtered.filter((a) => a.category === c.id),
     })).filter((g) => g.items.length > 0)
-  }, [filtered, query])
+  }, [filtered, query, t])
 
   const openArticle = (id: string) => {
     setActiveId(id)
@@ -253,8 +264,8 @@ export function Wiki({ open, onClose, initialId }: WikiProps) {
     window.setTimeout(() => searchRef.current?.focus(), 40)
   }
 
-  const onTagClick = (t: string) => {
-    setQuery(t)
+  const onTagClick = (tag: string) => {
+    setQuery(tag)
     if (isMobile && mobileView === 'article') {
       backToList()
       return
@@ -270,49 +281,49 @@ export function Wiki({ open, onClose, initialId }: WikiProps) {
     'wiki-panel' + (isMobile ? ` wiki-panel--mobile wiki-panel--${mobileView}` : '')
 
   return (
-    <div className="wiki-root" role="dialog" aria-modal="true" aria-label="Craft wiki">
-      <button type="button" className="wiki-backdrop" aria-label="Close wiki" onClick={onClose} />
+    <div className="wiki-root" role="dialog" aria-modal="true" aria-label={t('wiki.aria')}>
+      <button type="button" className="wiki-backdrop" aria-label={t('wiki.close')} onClick={onClose} />
       <div className={panelClass}>
         <header className="wiki-header">
           <div className="wiki-brand">
             {isMobile && mobileView === 'article' ? (
               <button type="button" className="wiki-back" onClick={backToList}>
-                ← All articles
+                {t('wiki.backAll')}
               </button>
             ) : (
-              <span className="wiki-kicker">F1 · Craft Wiki</span>
+              <span className="wiki-kicker">{t('wiki.kicker')}</span>
             )}
             <h2>
               {isMobile && mobileView === 'article' && active
                 ? active.title
-                : "Alex's Craft Knowledge"}
+                : t('wiki.knowledgeTitle')}
             </h2>
             {!(isMobile && mobileView === 'article') && (
-              <p className="wiki-sub">App help · oils · waxes · soap & candle craft</p>
+              <p className="wiki-sub">{t('wiki.sub')}</p>
             )}
           </div>
           <div className="wiki-header-actions">
             {showList && (
               <label className="wiki-search">
-                <span className="sr-only">Search wiki</span>
+                <span className="sr-only">{t('wiki.searchLabel')}</span>
                 <input
                   ref={searchRef}
                   type="search"
-                  placeholder="Search oils, lye, wick, FO…"
+                  placeholder={t('wiki.searchPlaceholder')}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   autoComplete="off"
                 />
               </label>
             )}
-            <button type="button" className="wiki-close" onClick={onClose} aria-label="Close">
-              {isMobile ? 'Close' : 'Esc'}
+            <button type="button" className="wiki-close" onClick={onClose} aria-label={t('wiki.close')}>
+              {isMobile ? t('wiki.closeMobile') : t('wiki.closeEsc')}
             </button>
           </div>
         </header>
 
         {showList && (
-          <div className="wiki-cats" role="tablist" aria-label="Wiki categories">
+          <div className="wiki-cats" role="tablist" aria-label={t('wiki.catsAria')}>
             <button
               type="button"
               role="tab"
@@ -320,7 +331,7 @@ export function Wiki({ open, onClose, initialId }: WikiProps) {
               aria-selected={category === 'all'}
               onClick={() => setCategory('all')}
             >
-              All
+              {t('wiki.all')}
             </button>
             {WIKI_CATEGORIES.map((c) => (
               <button
@@ -331,7 +342,7 @@ export function Wiki({ open, onClose, initialId }: WikiProps) {
                 aria-selected={category === c.id}
                 onClick={() => setCategory(c.id)}
               >
-                <span aria-hidden>{c.icon}</span> {c.label}
+                <span aria-hidden>{c.icon}</span> {t(`wiki.cat.${c.id}`)}
               </button>
             ))}
           </div>
@@ -345,7 +356,7 @@ export function Wiki({ open, onClose, initialId }: WikiProps) {
           ref={bodyRef}
         >
           {showList && (
-            <nav className="wiki-nav" aria-label="Articles">
+            <nav className="wiki-nav" aria-label={t('wiki.articlesAria')}>
               {navGroups.map((g) => (
                 <div key={g.id} className="wiki-nav-group">
                   <h3>
@@ -369,7 +380,7 @@ export function Wiki({ open, onClose, initialId }: WikiProps) {
                 </div>
               ))}
               {filtered.length === 0 && (
-                <p className="wiki-empty">No articles match. Try “coconut”, “trace”, or “wick”.</p>
+                <p className="wiki-empty">{t('wiki.empty')}</p>
               )}
             </nav>
           )}
@@ -379,23 +390,20 @@ export function Wiki({ open, onClose, initialId }: WikiProps) {
               {active ? (
                 <>
                   <header className="wiki-article-head">
-                    <span className="wiki-badge">
-                      {WIKI_CATEGORIES.find((c) => c.id === active.category)?.label ||
-                        active.category}
-                    </span>
+                    <span className="wiki-badge">{t(`wiki.cat.${active.category}`)}</span>
                     {/* Title lives in the panel header on mobile article view */}
                     {!(isMobile && mobileView === 'article') && <h3>{active.title}</h3>}
                     <p className="wiki-article-sum">{active.summary}</p>
                     {active.tags.length > 0 && (
                       <div className="wiki-tags">
-                        {active.tags.slice(0, 8).map((t) => (
+                        {active.tags.slice(0, 8).map((tag) => (
                           <button
-                            key={t}
+                            key={tag}
                             type="button"
                             className="wiki-tag"
-                            onClick={() => onTagClick(t)}
+                            onClick={() => onTagClick(tag)}
                           >
-                            {t}
+                            {displayTag(t, tag)}
                           </button>
                         ))}
                       </div>
@@ -412,17 +420,14 @@ export function Wiki({ open, onClose, initialId }: WikiProps) {
                   <footer className="wiki-article-foot">
                     {isMobile && (
                       <button type="button" className="wiki-back-foot" onClick={backToList}>
-                        ← Back to all articles
+                        {t('wiki.backFoot')}
                       </button>
                     )}
-                    <p>
-                      Educational craft reference — always verify SAP, IFRA, and brand TDS with your
-                      suppliers. Not lab certification.
-                    </p>
+                    <p>{t('wiki.footer')}</p>
                   </footer>
                 </>
               ) : (
-                <p className="wiki-empty">Select an article.</p>
+                <p className="wiki-empty">{t('wiki.select')}</p>
               )}
             </article>
           )}

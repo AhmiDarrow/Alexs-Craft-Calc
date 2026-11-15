@@ -2,7 +2,7 @@
 
 const SOAP_RECIPES_KEY = 'alien-craft-soap-recipes'
 const CANDLE_RECIPES_KEY = 'alien-craft-candle-recipes'
-const PREFS_KEY = 'alien-craft-prefs'
+export const PREFS_KEY = 'alien-craft-prefs'
 
 export const SHARE_FORMAT = 'alex-craft-calc-recipe' as const
 export const SHARE_VERSION = 1 as const
@@ -353,6 +353,8 @@ export function deleteCandleRecipe(id: string): StorageWriteResult {
 
 export interface AppPrefs {
   lastWikiId?: string
+  /** Chosen locale id. Absent on older profiles until the language picker or first run writes it. */
+  locale?: string
 }
 
 export function getPrefs(): AppPrefs {
@@ -360,6 +362,7 @@ export function getPrefs(): AppPrefs {
   if (!isRecord(raw)) return {}
   const out: AppPrefs = {}
   if (typeof raw.lastWikiId === 'string') out.lastWikiId = raw.lastWikiId.slice(0, 120)
+  if (typeof raw.locale === 'string' && raw.locale.trim()) out.locale = raw.locale.slice(0, 16)
   return out
 }
 
@@ -827,12 +830,12 @@ export function downloadSharePack(pack: RecipeSharePack) {
   exportLibraryFile()
 }
 
-/** Format a short meta line for saved-list rows */
-export function formatSavedAt(iso: string): string {
+/** Format a short meta line for saved-list rows. One-arg calls keep the runtime locale. */
+export function formatSavedAt(iso: string, locale?: string): string {
   try {
     const d = new Date(iso)
     if (Number.isNaN(d.getTime())) return ''
-    return d.toLocaleString(undefined, {
+    return d.toLocaleString(locale, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -898,16 +901,27 @@ function packFilename(pack: RecipeSharePack): string {
   return `alex-craft-library-${stamp}.json`
 }
 
-function packShareTitle(pack: RecipeSharePack): string {
+export type ShareChrome = {
+  plainText?: string
+  attachNote?: string
+  tooLargeNote?: string
+  title?: string
+}
+
+const DEFAULT_ATTACH = "— Alex's Craft Calc recipe file attached (or use Load in the app)."
+const DEFAULT_TOO_LARGE = '(Recipe too large for text share — use Load with a saved backup file.)'
+
+function packShareTitle(pack: RecipeSharePack, title?: string): string {
+  if (title) return title
   if (pack.kind === 'soap' && pack.soap?.[0]) return `Soap: ${pack.soap[0].name}`
   if (pack.kind === 'candle' && pack.candle?.[0]) return `Candle: ${pack.candle[0].name}`
   const n = (pack.soap?.length || 0) + (pack.candle?.length || 0)
   return `Alex's Craft Calc library (${n})`
 }
 
-function packShareText(pack: RecipeSharePack, plainSummary?: string): string {
+function packShareText(pack: RecipeSharePack, plainSummary?: string, attachNote?: string): string {
   if (plainSummary && plainSummary.trim()) {
-    return `${plainSummary.trim()}\n\n— Alex's Craft Calc recipe file attached (or use Load in the app).`
+    return `${plainSummary.trim()}\n\n${attachNote || DEFAULT_ATTACH}`
   }
   if (pack.kind === 'soap' && pack.soap?.[0]) {
     const r = pack.soap[0]
@@ -936,12 +950,12 @@ export function canNativeShare(): boolean {
  */
 export async function shareRecipes(
   pack: RecipeSharePack,
-  opts?: { plainText?: string },
+  opts?: ShareChrome,
 ): Promise<ShareRecipesResult> {
   const json = packToJson(pack)
   const filename = packFilename(pack)
-  const title = packShareTitle(pack)
-  const text = packShareText(pack, opts?.plainText)
+  const title = packShareTitle(pack, opts?.title)
+  const text = packShareText(pack, opts?.plainText, opts?.attachNote)
   const mime = 'application/json'
 
   // 1) Native share with file (Android Chrome, iOS 15+, etc.)
@@ -978,7 +992,7 @@ export async function shareRecipes(
         // Keep share sheet payloads reasonable
         const clipped =
           textPayload.length > 120_000
-            ? `${title}\n\n${text}\n\n(Recipe too large for text share — use Load with a saved backup file.)`
+            ? `${title}\n\n${text}\n\n${opts?.tooLargeNote || DEFAULT_TOO_LARGE}`
             : textPayload
         if (typeof navigator.canShare === 'function' && !navigator.canShare({ text: clipped, title })) {
           /* skip */
@@ -1021,24 +1035,26 @@ export async function shareRecipes(
 export async function shareSoapRecipe(
   recipe: SavedSoapRecipe,
   plainText?: string,
+  chrome?: Omit<ShareChrome, 'plainText'>,
 ): Promise<ShareRecipesResult> {
-  return shareRecipes(buildSoapSharePack(recipe), { plainText })
+  return shareRecipes(buildSoapSharePack(recipe), { plainText, ...chrome })
 }
 
 /** Share only the current candle recipe (file + summary). */
 export async function shareCandleRecipe(
   recipe: SavedCandleRecipe,
   plainText?: string,
+  chrome?: Omit<ShareChrome, 'plainText'>,
 ): Promise<ShareRecipesResult> {
-  return shareRecipes(buildCandleSharePack(recipe), { plainText })
+  return shareRecipes(buildCandleSharePack(recipe), { plainText, ...chrome })
 }
 
 /** Share full local library (backup / move phones). */
-export async function shareLibrary(): Promise<ShareRecipesResult> {
+export async function shareLibrary(chrome?: ShareChrome): Promise<ShareRecipesResult> {
   const pack = buildLibrarySharePack()
   const n = (pack.soap?.length || 0) + (pack.candle?.length || 0)
   if (n === 0) {
     return { ok: false, mode: 'failed', message: 'No saved recipes to share' }
   }
-  return shareRecipes(pack)
+  return shareRecipes(pack, chrome)
 }

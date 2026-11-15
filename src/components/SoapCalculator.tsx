@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { OILS, getOil } from '../data/oils'
 import {
   additiveAmountInRecipeUnit,
@@ -39,6 +39,17 @@ import {
 } from '../lib/storage'
 import { escapeHtml } from '../lib/htmlEscape'
 import { useSoapRecipeIO } from '../hooks/useSoapRecipeIO'
+import { useI18n } from '../i18n/I18nProvider'
+import { formatEditable, formatNumber, reformatEditable } from '../i18n/format'
+import { parseUserDecimal } from '../lib/parseDecimal'
+import { additiveDisplayName, oilDisplayName, tx } from '../i18n/content'
+import {
+  importHasChanges,
+  localizeImportSummary,
+  localizeRuntimeMessage,
+} from '../i18n/runtimeMessages'
+import type { ToastFn } from './Toast'
+import { RichText } from './RichText'
 
 type OilRow = {
   key: string
@@ -55,13 +66,13 @@ type AdditiveRow = {
   amountUnit: AdditiveAmountUnit
 }
 
-const PRESETS: { name: string; oils: OilLine[] }[] = [
+const PRESETS: { id: string; oils: OilLine[] }[] = [
   {
-    name: 'Castile-ish',
+    id: 'castile',
     oils: [{ oilId: 'olive', amount: 1000 }],
   },
   {
-    name: 'Everyday Bar',
+    id: 'everyday',
     oils: [
       { oilId: 'olive', amount: 400 },
       { oilId: 'coconut', amount: 250 },
@@ -70,7 +81,7 @@ const PRESETS: { name: string; oils: OilLine[] }[] = [
     ],
   },
   {
-    name: 'Creamy Shea',
+    id: 'shea',
     oils: [
       { oilId: 'olive', amount: 350 },
       { oilId: 'coconut', amount: 250 },
@@ -80,7 +91,7 @@ const PRESETS: { name: string; oils: OilLine[] }[] = [
     ],
   },
   {
-    name: 'Palm-free',
+    id: 'palmfree',
     oils: [
       { oilId: 'olive', amount: 400 },
       { oilId: 'coconut', amount: 250 },
@@ -90,7 +101,7 @@ const PRESETS: { name: string; oils: OilLine[] }[] = [
     ],
   },
   {
-    name: 'Luxury Butter',
+    id: 'luxury',
     oils: [
       { oilId: 'olive', amount: 300 },
       { oilId: 'coconut', amount: 200 },
@@ -102,14 +113,19 @@ const PRESETS: { name: string; oils: OilLine[] }[] = [
   },
 ]
 
+const OIL_GROUPS = (['hard', 'soft', 'butter', 'specialty', 'liquid'] as const)
+  .map((category) => ({
+    category,
+    oils: OILS.filter((o) => o.category === category),
+  }))
+  .filter((group) => group.oils.length > 0)
+
 function uid() {
   return Math.random().toString(36).slice(2, 9)
 }
 
-function fmtNum(n: number, places = 2): string {
-  if (!Number.isFinite(n)) return '0'
-  const r = Math.round(n * 10 ** places) / 10 ** places
-  return String(r)
+function additivePlaces(amountUnit: AdditiveAmountUnit): number {
+  return amountUnit === 'tsp' || amountUnit === 'tbsp' ? 3 : 4
 }
 
 /** Map a quality value onto the track: the ideal band always sits 25–75%. */
@@ -121,13 +137,13 @@ function qualityBarPos(q: { value: number | null; min: number; max: number }): n
 }
 
 /** Build rows from weights against a fixed Total oils ceiling (not share-of-sum). */
-function rowsFromWeightOils(oils: OilLine[], ceiling: number): OilRow[] {
+function rowsFromWeightOils(oils: OilLine[], ceiling: number, locale: string): OilRow[] {
   const pcts = percentsFromOils(oils, ceiling > 0 ? ceiling : undefined)
   return oils.map((o, i) => ({
     key: uid(),
     oilId: o.oilId,
-    amount: String(o.amount),
-    pct: fmtNum(pcts[i]?.pct ?? 0, 2),
+    amount: formatEditable(o.amount, locale, 4),
+    pct: formatEditable(pcts[i]?.pct ?? 0, locale, 2),
   }))
 }
 
@@ -135,20 +151,15 @@ function rowsFromWeightOils(oils: OilLine[], ceiling: number): OilRow[] {
 function rowsFromPercentOils(
   lines: { oilId: string; pct: number }[],
   ceiling: number,
+  locale: string,
 ): OilRow[] {
   const oils = oilsFromPercents(ceiling, lines)
   return oils.map((o, i) => ({
     key: uid(),
     oilId: o.oilId,
-    amount: fmtNum(o.amount, 4),
-    pct: fmtNum(lines[i]?.pct ?? 0, 2),
+    amount: formatEditable(o.amount, locale, 4),
+    pct: formatEditable(lines[i]?.pct ?? 0, locale, 2),
   }))
-}
-
-function unitLabel(u: SoapUnit): string {
-  if (u === 'g') return 'g'
-  if (u === 'oz') return 'oz'
-  return 'lb'
 }
 
 function parseAdditiveAmountUnit(
@@ -163,14 +174,23 @@ function parseAdditiveAmountUnit(
 
 interface SoapCalculatorProps {
   onOpenWiki?: (articleId?: string) => void
-  onToast?: (msg: string) => void
+  onToast?: ToastFn
 }
 
 export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
+  const { t, intlLocale } = useI18n()
+
+  const num = (raw: string): number => {
+    const n = parseUserDecimal(raw, intlLocale)
+    return Number.isFinite(n) ? n : NaN
+  }
+  const edit = (n: number, places = 2): string => formatEditable(n, intlLocale, places)
+  const show = (n: number, places = 2): string => formatNumber(n, intlLocale, places)
+
   const defaults = defaultSoapInput()
   const defaultCeiling = defaults.oils.reduce((s, o) => s + o.amount, 0)
   const [rows, setRows] = useState<OilRow[]>(() =>
-    rowsFromWeightOils(defaults.oils, defaultCeiling),
+    rowsFromWeightOils(defaults.oils, defaultCeiling, intlLocale),
   )
   const [lyeType, setLyeType] = useState<LyeType>('naoh')
   const [superfatPct, setSuperfatPct] = useState('5')
@@ -181,11 +201,40 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
   const [fragrancePct, setFragrancePct] = useState('3')
   const [unit, setUnit] = useState<SoapUnit>('oz')
   /** Fixed recipe ceiling — never auto-rewritten when oils change. */
-  const [totalOilsWeight, setTotalOilsWeight] = useState(() => fmtNum(defaultCeiling, 4))
+  const [totalOilsWeight, setTotalOilsWeight] = useState(() =>
+    formatEditable(defaultCeiling, intlLocale, 4),
+  )
   const [recipeName, setRecipeName] = useState('')
   const [recipeNotes, setRecipeNotes] = useState('')
   const [additiveRows, setAdditiveRows] = useState<AdditiveRow[]>([])
   const importRef = useRef<HTMLInputElement>(null)
+  const prevLocaleRef = useRef(intlLocale)
+
+  useEffect(() => {
+    const prev = prevLocaleRef.current
+    if (prev === intlLocale) return
+    prevLocaleRef.current = intlLocale
+    setRows((prevRows) =>
+      prevRows.map((r) => ({
+        ...r,
+        amount: reformatEditable(r.amount, prev, intlLocale, 4),
+        pct: reformatEditable(r.pct, prev, intlLocale, 2),
+      })),
+    )
+    setTotalOilsWeight((raw) => reformatEditable(raw, prev, intlLocale, 4))
+    setSuperfatPct((raw) => reformatEditable(raw, prev, intlLocale, 2))
+    setWaterAsPercentOfOils((raw) => reformatEditable(raw, prev, intlLocale, 2))
+    setLyeConcentrationPct((raw) => reformatEditable(raw, prev, intlLocale, 2))
+    setWaterDiscountPct((raw) => reformatEditable(raw, prev, intlLocale, 2))
+    setFragrancePct((raw) => reformatEditable(raw, prev, intlLocale, 2))
+    setAdditiveRows((prevRows) =>
+      prevRows.map((r) => ({
+        ...r,
+        amount: reformatEditable(r.amount, prev, intlLocale, additivePlaces(r.amountUnit)),
+      })),
+    )
+  }, [intlLocale])
+
   const {
     saved,
     showSaved,
@@ -199,33 +248,27 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
     shareAll,
   } = useSoapRecipeIO(onToast)
 
-  const u = unitLabel(unit)
+  const u = t('unit.' + unit)
 
-  const parsedTotalOils = parseFloat(totalOilsWeight) || 0
+  // Locale edits replace this string; do not re-parse on intlLocale alone.
+  const parsedTotalOils = useMemo(() => num(totalOilsWeight) || 0, [totalOilsWeight])
 
   const weightSum = useMemo(
     () =>
       rows.reduce((s, r) => {
         if (!r.oilId) return s
-        const a = parseFloat(r.amount)
+        const a = num(r.amount)
         return s + (Number.isFinite(a) && a > 0 ? a : 0)
       }, 0),
     [rows],
   )
 
   const pctSum = useMemo(
-    () => sumOilPercents(rows.filter((r) => r.oilId).map((r) => parseFloat(r.pct) || 0)),
+    () => sumOilPercents(rows.filter((r) => r.oilId).map((r) => num(r.pct) || 0)),
     [rows],
   )
   const pctOk = isPercentTotalLocked(pctSum)
   const pctDelta = Math.round((pctSum - 100) * 100) / 100
-  const weightsOk =
-    parsedTotalOils > 0 &&
-    weightsMatchCeiling(
-      rows.filter((r) => r.oilId).map((r) => parseFloat(r.amount) || 0),
-      parsedTotalOils,
-    )
-  const weightDelta = Math.round((weightSum - parsedTotalOils) * 10000) / 10000
 
   /** Always use typed oil weights for lye math — ceiling only gates unlock. */
   const resolvedOils: OilLine[] = useMemo(() => {
@@ -233,31 +276,34 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
       .filter((r) => r.oilId)
       .map((r) => ({
         oilId: r.oilId,
-        amount: parseFloat(r.amount) || 0,
+        amount: num(r.amount) || 0,
       }))
   }, [rows])
+
+  const weightsOk =
+    parsedTotalOils > 0 &&
+    weightsMatchCeiling(
+      resolvedOils.map((r) => r.amount),
+      parsedTotalOils,
+    )
+  const weightDelta = Math.round((weightSum - parsedTotalOils) * 10000) / 10000
 
   const input: SoapInput = useMemo(
     () => ({
       oils: resolvedOils,
       lyeType,
-      superfatPct: parseFloat(superfatPct) || 0,
+      superfatPct: num(superfatPct) || 0,
       waterMethod,
-      waterAsPercentOfOils: parseFloat(waterAsPercentOfOils) || 0,
-      lyeConcentrationPct: parseFloat(lyeConcentrationPct) || 33,
-      waterDiscountPct: parseFloat(waterDiscountPct) || 0,
-      fragrancePct: parseFloat(fragrancePct) || 0,
+      waterAsPercentOfOils: num(waterAsPercentOfOils) || 0,
+      lyeConcentrationPct: num(lyeConcentrationPct) || 33,
+      waterDiscountPct: num(waterDiscountPct) || 0,
+      fragrancePct: num(fragrancePct) || 0,
       unit,
       additives: additiveRows
-        .filter((r) => r.additiveId && (parseFloat(r.amount) || 0) > 0)
+        .filter((r) => r.additiveId && (num(r.amount) || 0) > 0)
         .map((r) => ({
           additiveId: r.additiveId,
-          amount: additiveAmountInRecipeUnit(
-            parseFloat(r.amount) || 0,
-            r.amountUnit,
-            unit,
-            r.additiveId,
-          ),
+          amount: additiveAmountInRecipeUnit(num(r.amount) || 0, r.amountUnit, unit, r.additiveId),
         })),
     }),
     [
@@ -277,31 +323,25 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
   const lockWarnings = useMemo(() => {
     const w: string[] = []
     if (!(parsedTotalOils > 0)) {
-      w.push('Enter a Total oils weight — that is the recipe ceiling.')
+      w.push(t('warn.needCeiling'))
     }
     if (!pctOk) {
       w.push(
         pctSum === 0
-          ? 'Enter oil weights or percentages that total 100% of Total oils.'
-          : 'Oil percentages must total 100% of Total oils before results unlock (currently ' +
-              fmtNum(pctSum, 2) +
-              '%).',
+          ? t('warn.needOilPct')
+          : t('warn.pctNot100', { pct: show(pctSum, 2) }),
       )
     } else if (!weightsOk) {
       w.push(
-        'Oil weights must add up to Total oils (' +
-          fmtNum(parsedTotalOils, 4) +
-          ' ' +
-          u +
-          ') — currently ' +
-          fmtNum(weightSum, 4) +
-          ' ' +
-          u +
-          '.',
+        t('warn.weightsOff', {
+          ceiling: show(parsedTotalOils, 4),
+          unit: u,
+          weight: show(weightSum, 4),
+        }),
       )
     }
     return w
-  }, [parsedTotalOils, pctOk, pctSum, weightsOk, weightSum, u])
+  }, [parsedTotalOils, pctOk, pctSum, weightsOk, weightSum, u, t])
 
   const result = useMemo(() => {
     if (lockWarnings.length > 0) {
@@ -331,7 +371,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
     setRows((prev) =>
       prev.map((r) => {
         if (r.key !== key) return r
-        const amount = parseFloat(amountStr)
+        const amount = num(amountStr)
         const pct =
           parsedTotalOils > 0 && Number.isFinite(amount)
             ? pctOfCeiling(amount > 0 ? amount : 0, parsedTotalOils)
@@ -339,7 +379,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
         return {
           ...r,
           amount: amountStr,
-          pct: fmtNum(pct, 2),
+          pct: edit(pct, 2),
         }
       }),
     )
@@ -353,7 +393,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
     setRows((prev) =>
       prev.map((r) => {
         if (r.key !== key) return r
-        const pct = parseFloat(pctStr)
+        const pct = num(pctStr)
         const amount =
           parsedTotalOils > 0 && Number.isFinite(pct)
             ? amountFromCeilingPct(pct > 0 ? pct : 0, parsedTotalOils)
@@ -361,7 +401,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
         return {
           ...r,
           pct: pctStr,
-          amount: fmtNum(amount, 4),
+          amount: edit(amount, 4),
         }
       }),
     )
@@ -414,7 +454,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
     setAdditiveRows((prev) =>
       prev.map((r) => {
         if (r.key !== key || r.amountUnit === nextUnit) return r
-        const n = parseFloat(r.amount)
+        const n = num(r.amount)
         if (!Number.isFinite(n) || r.amount.trim() === '') {
           return { ...r, amountUnit: nextUnit }
         }
@@ -422,7 +462,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
         return {
           ...r,
           amountUnit: nextUnit,
-          amount: fmtNum(converted, nextUnit === 'tsp' || nextUnit === 'tbsp' ? 3 : 4),
+          amount: edit(converted, additivePlaces(nextUnit)),
         }
       }),
     )
@@ -444,14 +484,14 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
       amount: convertWeight(o.amount, 'g', unit),
     }))
     const total = converted.reduce((s, o) => s + o.amount, 0)
-    setTotalOilsWeight(fmtNum(total, 4))
-    setRows(rowsFromWeightOils(converted, total))
+    setTotalOilsWeight(edit(total, 4))
+    setRows(rowsFromWeightOils(converted, total, intlLocale))
     // Presets are oil-only formulas — drop leftover add-ins from the previous recipe.
     setAdditiveRows([])
     if (name) setRecipeName(name)
     // Preset is a new working copy — don't overwrite a previously loaded library slot.
     setActiveRecipeId(null)
-    onToast?.(name ? name + ' loaded' : 'Preset loaded')
+    onToast?.(name ? t('toast.presetLoaded', { name }) : t('toast.presetGeneric'), 'ok')
   }
 
   /**
@@ -463,12 +503,12 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
       parsedTotalOils > 0 ? parsedTotalOils : unit === 'lb' ? 2 : unit === 'oz' ? 32 : 1000
     setRows([])
     setAdditiveRows([])
-    setTotalOilsWeight(fmtNum(total, 4))
-    setRecipeName('Custom')
+    setTotalOilsWeight(edit(total, 4))
+    setRecipeName(t('preset.custom'))
     setRecipeNotes('')
     setActiveRecipeId(null)
     setShowSaved(false)
-    onToast?.('Custom — empty recipe. Add oils; Total oils is the ceiling')
+    onToast?.(t('toast.customEmpty'), 'ok')
   }
 
   /**
@@ -478,22 +518,22 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
    */
   function onTotalOilsChange(value: string) {
     const prevCeiling = parsedTotalOils
-    const nextCeiling = parseFloat(value) || 0
+    const nextCeiling = num(value) || 0
     setTotalOilsWeight(value)
     if (!(nextCeiling > 0)) return
     setRows((prev) =>
       prev.map((r) => {
-        const pct = parseFloat(r.pct)
+        const pct = num(r.pct)
         // Prefer stored % (stable across ceiling edits). Fall back to old weight/ceiling.
         let usePct = Number.isFinite(pct) ? pct : 0
         if (!(usePct > 0) && prevCeiling > 0) {
-          const amt = parseFloat(r.amount) || 0
+          const amt = num(r.amount) || 0
           usePct = pctOfCeiling(amt, prevCeiling)
         }
         return {
           ...r,
-          pct: fmtNum(usePct, 2),
-          amount: fmtNum(amountFromCeilingPct(usePct > 0 ? usePct : 0, nextCeiling), 4),
+          pct: edit(usePct, 2),
+          amount: edit(amountFromCeilingPct(usePct > 0 ? usePct : 0, nextCeiling), 4),
         }
       }),
     )
@@ -501,89 +541,88 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
 
   /** Optional: force every weight = % × ceiling (same as re-applying current %). */
   function applyPercentsToCeiling() {
-    const target = parseFloat(totalOilsWeight)
+    const target = num(totalOilsWeight)
     if (!target || target <= 0) {
-      onToast?.('Enter a Total oils weight first')
+      onToast?.(t('toast.needTotal'), 'warn')
       return
     }
     if (!pctOk) {
-      onToast?.('Oil % must total 100% before applying')
+      onToast?.(t('toast.pctMust100'), 'warn')
       return
     }
     setRows((prev) =>
       prev.map((r) => {
-        const pct = parseFloat(r.pct) || 0
+        const pct = num(r.pct) || 0
         return {
           ...r,
-          amount: fmtNum(amountFromCeilingPct(pct, target), 4),
-          pct: fmtNum(pct, 2),
+          amount: edit(amountFromCeilingPct(pct, target), 4),
+          pct: edit(pct, 2),
         }
       }),
     )
-    onToast?.('Weights set from % × Total oils')
+    onToast?.(t('toast.weightsSet'), 'ok')
   }
 
   /** Optional: scale current weights so they sum exactly to the ceiling (keeps ratios). */
   function scaleWeightsToCeiling() {
-    const target = parseFloat(totalOilsWeight)
+    const target = num(totalOilsWeight)
     if (!target || target <= 0) {
-      onToast?.('Enter a Total oils weight first')
+      onToast?.(t('toast.needTotal'), 'warn')
       return
     }
-    const current = rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0)
+    const current = rows.reduce((s, r) => s + (num(r.amount) || 0), 0)
     if (!(current > 0)) {
-      onToast?.('Add oil weights before scaling')
+      onToast?.(t('toast.needWeights'), 'warn')
       return
     }
     const factor = target / current
     setRows((prev) =>
       prev.map((r) => {
-        const amount = (parseFloat(r.amount) || 0) * factor
+        const amount = (num(r.amount) || 0) * factor
         return {
           ...r,
-          amount: fmtNum(amount, 4),
-          pct: fmtNum(pctOfCeiling(amount, target), 2),
+          amount: edit(amount, 4),
+          pct: edit(pctOfCeiling(amount, target), 2),
         }
       }),
     )
-    onToast?.('Scaled oils to Total oils (' + fmtNum(target, 4) + ' ' + u + ')')
+    onToast?.(t('toast.scaled', { amount: show(target, 4), unit: u }), 'ok')
   }
 
   function resetDefaults() {
     const d = defaultSoapInput()
     const total = d.oils.reduce((s, o) => s + o.amount, 0)
     setLyeType(d.lyeType)
-    setSuperfatPct(String(d.superfatPct))
+    setSuperfatPct(edit(d.superfatPct, 2))
     setWaterMethod(d.waterMethod)
-    setWaterAsPercentOfOils(String(d.waterAsPercentOfOils))
-    setLyeConcentrationPct(String(d.lyeConcentrationPct))
-    setWaterDiscountPct(String(d.waterDiscountPct))
-    setFragrancePct(String(d.fragrancePct))
+    setWaterAsPercentOfOils(edit(d.waterAsPercentOfOils, 2))
+    setLyeConcentrationPct(edit(d.lyeConcentrationPct, 2))
+    setWaterDiscountPct(edit(d.waterDiscountPct, 2))
+    setFragrancePct(edit(d.fragrancePct, 2))
     setUnit(d.unit)
-    setTotalOilsWeight(fmtNum(total, 4))
-    setRows(rowsFromWeightOils(d.oils, total))
+    setTotalOilsWeight(edit(total, 4))
+    setRows(rowsFromWeightOils(d.oils, total, intlLocale))
     setRecipeName('')
     setRecipeNotes('')
     setAdditiveRows([])
     setActiveRecipeId(null)
-    onToast?.('Soap calculator reset')
+    onToast?.(t('toast.soapReset'), 'ok')
   }
 
   function onUnitChange(next: SoapUnit) {
     if (next === unit) return
-    const st = parseFloat(totalOilsWeight)
-    const nextCeiling =
-      Number.isFinite(st) && st > 0 ? convertWeight(st, unit, next) : 0
+    const st = num(totalOilsWeight)
+    const nextCeiling = Number.isFinite(st) && st > 0 ? convertWeight(st, unit, next) : 0
     setRows((prev) =>
       prev.map((r) => {
-        const n = parseFloat(r.amount)
+        const n = num(r.amount)
         if (!Number.isFinite(n)) return r
         const amount = convertWeight(n, unit, next)
         return {
           ...r,
-          amount: fmtNum(amount, 4),
+          amount: edit(amount, 4),
           // % of ceiling is unit-invariant; recompute from converted mass for safety
-          pct: fmtNum(pctOfCeiling(amount, nextCeiling > 0 ? nextCeiling : 0), 2),
+          pct: edit(pctOfCeiling(amount, nextCeiling > 0 ? nextCeiling : 0), 2),
         }
       }),
     )
@@ -591,19 +630,19 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
     setAdditiveRows((prev) =>
       prev.map((r) => {
         if (isAdditiveVolumeUnit(r.amountUnit)) return r
-        const n = parseFloat(r.amount)
+        const n = num(r.amount)
         if (!Number.isFinite(n) || r.amount.trim() === '') {
           return { ...r, amountUnit: next }
         }
         return {
           ...r,
           amountUnit: next,
-          amount: fmtNum(convertWeight(n, r.amountUnit as SoapUnit, next), 4),
+          amount: edit(convertWeight(n, r.amountUnit as SoapUnit, next), 4),
         }
       }),
     )
     if (nextCeiling > 0) {
-      setTotalOilsWeight(fmtNum(nextCeiling, 4))
+      setTotalOilsWeight(edit(nextCeiling, 4))
     }
     setUnit(next)
   }
@@ -613,32 +652,32 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
       .filter((r) => r.oilId)
       .map((r) => ({
         oilId: r.oilId,
-        amount: parseFloat(r.amount) || 0,
-        pct: parseFloat(r.pct) || 0,
+        amount: num(r.amount) || 0,
+        pct: num(r.pct) || 0,
       }))
   }
 
   function snapshotAdditives() {
     return additiveRows
-      .filter((r) => r.additiveId && (parseFloat(r.amount) || 0) > 0)
+      .filter((r) => r.additiveId && (num(r.amount) || 0) > 0)
       .map((r) => ({
         additiveId: r.additiveId,
-        amount: parseFloat(r.amount) || 0,
+        amount: num(r.amount) || 0,
         amountUnit: r.amountUnit,
       }))
   }
 
   function handleSave() {
     const recipe = persistSave({
-      name: recipeName.trim() || 'Soap ' + new Date().toLocaleDateString(),
+      name: recipeName.trim(),
       oils: snapshotOils(),
       lyeType,
-      superfatPct: parseFloat(superfatPct) || 0,
+      superfatPct: num(superfatPct) || 0,
       waterMethod,
-      waterAsPercentOfOils: parseFloat(waterAsPercentOfOils) || 0,
-      lyeConcentrationPct: parseFloat(lyeConcentrationPct) || 33,
-      waterDiscountPct: parseFloat(waterDiscountPct) || 0,
-      fragrancePct: parseFloat(fragrancePct) || 0,
+      waterAsPercentOfOils: num(waterAsPercentOfOils) || 0,
+      lyeConcentrationPct: num(lyeConcentrationPct) || 33,
+      waterDiscountPct: num(waterDiscountPct) || 0,
+      fragrancePct: num(fragrancePct) || 0,
       unit,
       oilEntryMode: 'dual',
       totalOilsWeight: parsedTotalOils > 0 ? parsedTotalOils : undefined,
@@ -649,8 +688,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
   }
 
   function loadRecipe(r: SavedSoapRecipe) {
-    const nextUnit: SoapUnit =
-      r.unit === 'g' || r.unit === 'lb' || r.unit === 'oz' ? r.unit : 'oz'
+    const nextUnit: SoapUnit = r.unit === 'g' || r.unit === 'lb' || r.unit === 'oz' ? r.unit : 'oz'
     const totalFromRecipe =
       r.totalOilsWeight != null && r.totalOilsWeight > 0
         ? r.totalOilsWeight
@@ -665,7 +703,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
         oilId: o.oilId,
         pct: o.pct != null && o.pct > 0 ? o.pct : pctOfCeiling(o.amount, totalFromRecipe),
       }))
-      nextRows = rowsFromPercentOils(lines, totalFromRecipe)
+      nextRows = rowsFromPercentOils(lines, totalFromRecipe, intlLocale)
     } else {
       nextRows = r.oils.map((o) => {
         const amount = o.amount > 0 ? o.amount : 0
@@ -678,50 +716,54 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
         return {
           key: uid(),
           oilId: o.oilId,
-          amount: String(amount),
-          pct: fmtNum(pct, 2),
+          amount: formatEditable(amount, intlLocale, 4),
+          pct: formatEditable(pct, intlLocale, 2),
         }
       })
       // If amounts were empty but % exist, materialize weights from ceiling.
       if (
         totalFromRecipe > 0 &&
-        nextRows.every((row) => !(parseFloat(row.amount) > 0)) &&
-        nextRows.some((row) => parseFloat(row.pct) > 0)
+        nextRows.every((row) => !(num(row.amount) > 0)) &&
+        nextRows.some((row) => num(row.pct) > 0)
       ) {
         nextRows = rowsFromPercentOils(
-          nextRows.map((row) => ({ oilId: row.oilId, pct: parseFloat(row.pct) || 0 })),
+          nextRows.map((row) => ({ oilId: row.oilId, pct: num(row.pct) || 0 })),
           totalFromRecipe,
+          intlLocale,
         )
       }
     }
 
     setTotalOilsWeight(
       totalFromRecipe > 0
-        ? fmtNum(totalFromRecipe, 4)
-        : fmtNum(unit === 'lb' ? 2 : unit === 'oz' ? 32 : 1000, 4),
+        ? edit(totalFromRecipe, 4)
+        : edit(unit === 'lb' ? 2 : unit === 'oz' ? 32 : 1000, 4),
     )
     setRows(nextRows)
     setLyeType(r.lyeType)
-    setSuperfatPct(String(r.superfatPct))
+    setSuperfatPct(edit(r.superfatPct, 2))
     setWaterMethod(r.waterMethod)
-    setWaterAsPercentOfOils(String(r.waterAsPercentOfOils))
-    setLyeConcentrationPct(String(r.lyeConcentrationPct))
-    setWaterDiscountPct(String(r.waterDiscountPct))
-    setFragrancePct(String(r.fragrancePct))
+    setWaterAsPercentOfOils(edit(r.waterAsPercentOfOils, 2))
+    setLyeConcentrationPct(edit(r.lyeConcentrationPct, 2))
+    setWaterDiscountPct(edit(r.waterDiscountPct, 2))
+    setFragrancePct(edit(r.fragrancePct, 2))
     setUnit(nextUnit)
     setRecipeName(r.name)
     setRecipeNotes(r.notes || '')
     setAdditiveRows(
-      (r.additives ?? []).map((a) => ({
-        key: uid(),
-        additiveId: a.additiveId,
-        amount: String(a.amount),
-        amountUnit: parseAdditiveAmountUnit(a.amountUnit, nextUnit),
-      })),
+      (r.additives ?? []).map((a) => {
+        const amountUnit = parseAdditiveAmountUnit(a.amountUnit, nextUnit)
+        return {
+          key: uid(),
+          additiveId: a.additiveId,
+          amount: edit(a.amount, additivePlaces(amountUnit)),
+          amountUnit,
+        }
+      }),
     )
     setActiveRecipeId(r.id)
     setShowSaved(false)
-    onToast?.(`Loaded “${r.name}”`)
+    onToast?.(t('toast.loaded', { name: r.name }), 'ok')
   }
 
   function handleDelete(id: string) {
@@ -731,15 +773,17 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
   const currentSoapRecipe = useCallback((): SavedSoapRecipe => {
     return currentSoapSnapshot({
       id: activeRecipeId || undefined,
-      name: recipeName.trim() || 'Soap ' + new Date().toLocaleDateString(),
+      name:
+        recipeName.trim() ||
+        t('recipe.defaultSoap', { date: new Date().toLocaleDateString(intlLocale) }),
       oils: snapshotOils(),
       lyeType,
-      superfatPct: parseFloat(superfatPct) || 0,
+      superfatPct: num(superfatPct) || 0,
       waterMethod,
-      waterAsPercentOfOils: parseFloat(waterAsPercentOfOils) || 0,
-      lyeConcentrationPct: parseFloat(lyeConcentrationPct) || 33,
-      waterDiscountPct: parseFloat(waterDiscountPct) || 0,
-      fragrancePct: parseFloat(fragrancePct) || 0,
+      waterAsPercentOfOils: num(waterAsPercentOfOils) || 0,
+      lyeConcentrationPct: num(lyeConcentrationPct) || 33,
+      waterDiscountPct: num(waterDiscountPct) || 0,
+      fragrancePct: num(fragrancePct) || 0,
       unit,
       oilEntryMode: 'dual',
       totalOilsWeight: parsedTotalOils > 0 ? parsedTotalOils : undefined,
@@ -762,6 +806,8 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
     parsedTotalOils,
     recipeNotes,
     additiveRows,
+    t,
+    intlLocale,
   ])
 
   const formatRecipeText = useCallback(() => {
@@ -770,83 +816,86 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
       .filter((r) => r.oilId)
       .map((r) => {
         const oil = getOil(r.oilId)
-        const amt = parseFloat(r.amount) || 0
-        const pct = parseFloat(r.pct) || 0
+        const amt = num(r.amount) || 0
+        const pct = num(r.pct) || 0
+        return t('copy.oilLine', {
+          name: oilDisplayName(t, r.oilId, oil?.name),
+          amount: show(amt, 4),
+          unit: u,
+          pct: show(pct, 2),
+        })
+      })
+    const additiveLines = additiveRows
+      .filter((r) => r.additiveId && (num(r.amount) || 0) > 0)
+      .map((r) => {
+        const amt = num(r.amount) || 0
+        const asRecipe = additiveAmountInRecipeUnit(amt, r.amountUnit, unit, r.additiveId)
+        const spoonNote =
+          isAdditiveVolumeUnit(r.amountUnit) && asRecipe > 0
+            ? t('copy.spoonNote', { amount: show(asRecipe, 3), unit: u })
+            : ''
         return (
-          '  • ' +
-          (oil?.name || r.oilId) +
-          ': ' +
-          fmtNum(amt, 4) +
-          ' ' +
-          u +
-          ' (' +
-          fmtNum(pct, 2) +
-          '%)'
+          t('copy.additiveLine', {
+            name: additiveDisplayName(t, r.additiveId, getAdditive(r.additiveId)?.name),
+            amount: show(amt, 4),
+            unit: t('unit.' + r.amountUnit),
+          }) + spoonNote
         )
       })
+    const warningBlock =
+      result.warnings.length > 0
+        ? t('copy.warnings', {
+            text: result.warnings.map((w) => localizeRuntimeMessage(w, t, intlLocale)).join('\n'),
+          })
+        : ''
     const lines = [
-      "Alex's Craft Calc — Soap Recipe" + (recipeName ? ': ' + recipeName : ''),
-      'Unit: ' +
-        u +
-        ' · Lye: ' +
-        lyeName +
-        ' · Superfat: ' +
-        superfatPct +
-        '% · FO: ' +
-        fragrancePct +
-        '%',
-      'Water method: ' + waterMethod,
-      'Total oils ceiling: ' + (parsedTotalOils || result.totalOils) + ' ' + u,
-      'Oil weight sum: ' + fmtNum(weightSum, 4) + ' ' + u + ' · Oil % sum: ' + fmtNum(pctSum, 2) + '%',
+      recipeName ? t('copy.soapTitleNamed', { name: recipeName }) : t('copy.soapTitle'),
+      t('copy.unitLine', {
+        unit: u,
+        lye: lyeName,
+        sf: show(num(superfatPct) || 0, 2),
+        fo: show(num(fragrancePct) || 0, 2),
+      }),
+      t('copy.waterMethod', { method: t('water.' + waterMethod) }),
+      t('copy.ceiling', {
+        amount: show(parsedTotalOils || result.totalOils, 4),
+        unit: u,
+      }),
+      t('copy.oilSum', {
+        weight: show(weightSum, 4),
+        unit: u,
+        pct: show(pctSum, 2),
+      }),
       '',
-      'Oils:',
+      t('copy.oilsHeader'),
       ...oilLines,
-      ...(additiveRows.some((r) => r.additiveId && (parseFloat(r.amount) || 0) > 0)
-        ? [
-            '',
-            'Additives:',
-            ...additiveRows
-              .filter((r) => r.additiveId && (parseFloat(r.amount) || 0) > 0)
-              .map((r) => {
-                const add = getAdditive(r.additiveId)
-                const amt = parseFloat(r.amount) || 0
-                const entry = r.amountUnit
-                const asRecipe = additiveAmountInRecipeUnit(amt, r.amountUnit, unit, r.additiveId)
-                const spoonNote =
-                  isAdditiveVolumeUnit(r.amountUnit) && asRecipe > 0
-                    ? ` (≈ ${fmtNum(asRecipe, 3)} ${u})`
-                    : ''
-                return (
-                  '  • ' +
-                  (add?.name || r.additiveId) +
-                  ': ' +
-                  fmtNum(amt, 4) +
-                  ' ' +
-                  entry +
-                  spoonNote
-                )
-              }),
-          ]
-        : []),
+      ...(additiveLines.length > 0 ? ['', t('copy.additivesHeader'), ...additiveLines] : []),
       '',
       result.locked
-        ? 'Results locked — oil weights/% must match Total oils ceiling (100%).'
+        ? t('copy.locked')
         : [
-            'Total oils: ' + result.totalOils + ' ' + u,
-            lyeName + ' (with SF): ' + result.lyeWithSuperfat + ' ' + u,
-            'Pure lye 0% SF: ' + result.pureLye + ' ' + u,
-            'Water: ' + result.water + ' ' + u,
-            'Lye solution: ' + result.lyeSolution + ' ' + u,
-            'Fragrance: ' + result.fragrance + ' ' + u,
-            'Batch total: ' + result.totalBatch + ' ' + u,
-            result.weightedIodine != null ? 'Weighted iodine: ' + result.weightedIodine : '',
-            result.weightedIns != null ? 'Weighted INS: ' + result.weightedIns : '',
+            t('copy.totalOils', { amount: show(result.totalOils, 2), unit: u }),
+            t('copy.lyeWithSf', {
+              lye: lyeName,
+              amount: show(result.lyeWithSuperfat, 2),
+              unit: u,
+            }),
+            t('copy.pureLye', { amount: show(result.pureLye, 2), unit: u }),
+            t('copy.water', { amount: show(result.water, 2), unit: u }),
+            t('copy.lyeSolution', { amount: show(result.lyeSolution, 2), unit: u }),
+            t('copy.fragrance', { amount: show(result.fragrance, 2), unit: u }),
+            t('copy.batchTotal', { amount: show(result.totalBatch, 2), unit: u }),
+            result.weightedIodine != null
+              ? t('copy.iodine', { value: show(result.weightedIodine, 1) })
+              : '',
+            result.weightedIns != null ? t('copy.ins', { value: show(result.weightedIns, 1) }) : '',
           ]
             .filter(Boolean)
             .join('\n'),
-      recipeNotes.trim() ? '\nNotes:\n' + recipeNotes.trim() : '',
+      warningBlock,
+      recipeNotes.trim() ? '\n' + t('copy.notes', { notes: recipeNotes.trim() }) : '',
       '',
-      'Always add lye to water. Wear PPE. Verify SAP with supplier COA.',
+      t('copy.ppe'),
     ]
     return lines.filter((x) => x !== '').join('\n')
   }, [
@@ -864,32 +913,42 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
     pctSum,
     recipeNotes,
     additiveRows,
+    t,
+    intlLocale,
   ])
 
   async function handleCopy() {
     const ok = await copyText(formatRecipeText())
-    onToast?.(ok ? 'Recipe copied to clipboard' : 'Copy failed')
+    onToast?.(ok ? t('toast.copied') : t('toast.copyFailed'), ok ? 'ok' : 'err')
   }
 
   function handlePrint() {
     const w = window.open('', '_blank', 'noopener,noreferrer,width=720,height=900')
     if (!w) {
-      onToast?.('Pop-up blocked — allow pop-ups to print')
+      onToast?.(t('toast.popup'), 'err')
       return
     }
     const html =
-      '<!doctype html><html><head><title>Soap Recipe</title>' +
+      '<!doctype html><html><head><title>' +
+      escapeHtml(t('print.soapTitle')) +
+      '</title>' +
       '<style>' +
-      'body{font-family:Segoe UI,system-ui,sans-serif;padding:2rem;color:#1a0a2e;line-height:1.5}' +
+      'body{font-family:' +
+      t('print.font') +
+      ';padding:2rem;color:#1a0a2e;line-height:1.5}' +
       'h1{color:#6b21a8;font-size:1.4rem}' +
       'pre{white-space:pre-wrap;background:#f5e9ff;padding:1rem;border-radius:12px}' +
       '.note{font-size:0.85rem;color:#666;margin-top:1.5rem}' +
       '</style></head><body>' +
-      "<h1>Alex's Craft Calc — Soap</h1>" +
+      '<h1>' +
+      escapeHtml(t('print.soapH1')) +
+      '</h1>' +
       '<pre>' +
       escapeHtml(formatRecipeText()) +
       '</pre>' +
-      '<p class="note">Craft planning only. Verify SAP values. Lye is caustic.</p>' +
+      '<p class="note">' +
+      escapeHtml(t('print.soapNote')) +
+      '</p>' +
       '<script>onload=()=>{print();}</script>' +
       '</body></html>'
     w.document.write(html)
@@ -900,9 +959,9 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
   async function handleLoadFile(file: File | null) {
     if (!file) return
     try {
-      const result = await loadFromFile(file)
-      if (!result) return
-      const { parsed, merged, summary } = result
+      const loaded = await loadFromFile(file)
+      if (!loaded) return
+      const { parsed, merged } = loaded
       if (
         merged.lastSoap &&
         parsed.kind === 'soap' &&
@@ -911,7 +970,10 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
       ) {
         loadRecipe(merged.lastSoap)
       }
-      onToast?.(summary)
+      onToast?.(
+        localizeImportSummary(merged, t, intlLocale),
+        importHasChanges(merged) ? 'ok' : 'warn',
+      )
     } finally {
       if (importRef.current) importRef.current.value = ''
     }
@@ -933,16 +995,17 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
     : parsedTotalOils > 0
       ? 'pct-status bad'
       : 'pct-status'
+  const lyeToken = lyeType === 'naoh' ? 'NaOH' : 'KOH'
 
   return (
     <div className="calc-panel soap-panel">
       <header className="panel-head">
         <div>
-          <h2>Soap Calculator</h2>
-          <p className="muted">Cold-process lye, water & fragrance — live as you type.</p>
+          <h2>{t('soap.title')}</h2>
+          <p className="muted">{t('soap.subtitle')}</p>
         </div>
         <div className="head-actions">
-          <div className="unit-tabs" role="group" aria-label="Weight unit">
+          <div className="unit-tabs" role="group" aria-label={t('unit.aria')}>
             {(['g', 'oz', 'lb'] as SoapUnit[]).map((opt) => (
               <button
                 key={opt}
@@ -950,15 +1013,15 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
                 className={'unit-tab' + (unit === opt ? ' active' : '')}
                 onClick={() => onUnitChange(opt)}
               >
-                {opt === 'g' ? 'g' : opt === 'oz' ? 'oz' : 'lb'}
+                {t('unit.' + opt)}
               </button>
             ))}
           </div>
           <button type="button" className="ghost" onClick={() => onOpenWiki?.('app-soap-ui')}>
-            Help
+            {t('common.help')}
           </button>
           <button type="button" className="ghost" onClick={resetDefaults}>
-            Reset
+            {t('common.reset')}
           </button>
         </div>
       </header>
@@ -966,10 +1029,10 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
       <section className="card toolbar-card">
         <div className="toolbar-row">
           <label className="grow">
-            Recipe name
+            {t('common.recipeName')}
             <input
               type="text"
-              placeholder="e.g. Lavender everyday bar"
+              placeholder={t('soap.placeholder')}
               value={recipeName}
               onChange={(e) => setRecipeName(e.target.value)}
               maxLength={120}
@@ -977,18 +1040,18 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
           </label>
           <div className="toolbar-btns">
             <button type="button" className="chip solid" onClick={handleSave}>
-              {activeRecipeId ? 'Update' : 'Save'}
+              {activeRecipeId ? t('common.update') : t('common.save')}
             </button>
             <button type="button" className="chip" onClick={() => setShowSaved((v) => !v)}>
-              {showSaved ? 'Hide saved' : `Saved (${saved.length})`}
+              {showSaved ? t('common.hideSaved') : t('common.savedCount', { n: saved.length })}
             </button>
             <button
               type="button"
               className="chip"
               onClick={() => importRef.current?.click()}
-              title="Load a recipe or library backup file into Saved"
+              title={t('common.loadTitle')}
             >
-              Load
+              {t('common.load')}
             </button>
             <button
               type="button"
@@ -998,15 +1061,20 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
                 e.preventDefault()
                 void handleShareLibrary()
               }}
-              title="Share recipe (phone share sheet or download). Right-click / long-press: share full library"
+              title={t('common.shareTitle')}
             >
-              Share
+              {t('common.share')}
             </button>
-            <button type="button" className="chip" onClick={handleCopy} title="Copy batch text">
-              Copy
+            <button
+              type="button"
+              className="chip"
+              onClick={handleCopy}
+              title={t('common.copyBatchTitle')}
+            >
+              {t('common.copy')}
             </button>
             <button type="button" className="chip" onClick={handlePrint}>
-              Print
+              {t('common.print')}
             </button>
           </div>
           <input
@@ -1014,85 +1082,91 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
             type="file"
             accept={RECIPE_FILE_ACCEPT}
             className="sr-only"
-            aria-label="Load recipe or library file"
+            aria-label={t('common.loadFileAria')}
             onChange={(e) => void handleLoadFile(e.target.files?.[0] ?? null)}
           />
         </div>
         <label className="notes-field">
-          Custom recipe notes
+          {t('common.customNotes')}
           <textarea
             rows={3}
             maxLength={4000}
-            placeholder="Batch notes, scent blend, colorants, cure log, mold, customer order…"
+            placeholder={t('soap.notesPlaceholder')}
             value={recipeNotes}
             onChange={(e) => setRecipeNotes(e.target.value)}
           />
         </label>
-        {activeRecipeId && (
-          <p className="hint recipe-slot-hint">
-            Editing saved recipe — Save updates this library slot (or rename to keep both).
-          </p>
-        )}
+        {activeRecipeId && <p className="hint recipe-slot-hint">{t('common.editingSlot')}</p>}
         {showSaved && (
           <div className="saved-list">
-            {saved.length === 0 && <p className="hint">No saved soap recipes yet.</p>}
+            {saved.length === 0 && <p className="hint">{t('soap.noSaved')}</p>}
             {saved.length > 0 && (
               <div className="saved-list-actions">
                 <button
                   type="button"
                   className="chip"
                   onClick={() => void handleShareLibrary()}
-                  title="Share or download every saved soap + candle recipe"
+                  title={t('common.shareLibraryTitle')}
                 >
-                  Share library
+                  {t('common.shareLibrary')}
                 </button>
               </div>
             )}
-            {saved.map((r) => (
-              <div
-                key={r.id}
-                className={'saved-item' + (r.id === activeRecipeId ? ' active' : '')}
-                aria-current={r.id === activeRecipeId ? 'true' : undefined}
-              >
-                <button type="button" className="saved-load" onClick={() => loadRecipe(r)}>
-                  <strong>{r.name}</strong>
-                  <span>
-                    {r.oils.length} oils · {r.lyeType.toUpperCase()} · SF {r.superfatPct}%
-                    {r.totalOilsWeight != null ? ` · ${fmtNum(r.totalOilsWeight, 2)} ${r.unit}` : ''}
-                    {formatSavedAt(r.savedAt) ? ` · ${formatSavedAt(r.savedAt)}` : ''}
-                  </span>
-                  {r.notes ? <span className="notes-chip">notes</span> : null}
-                </button>
-                <button
-                  type="button"
-                  className="icon-btn"
-                  aria-label={'Delete ' + r.name}
-                  onClick={() => handleDelete(r.id)}
+            {saved.map((r) => {
+              const savedAt = formatSavedAt(r.savedAt, intlLocale)
+              return (
+                <div
+                  key={r.id}
+                  className={'saved-item' + (r.id === activeRecipeId ? ' active' : '')}
+                  aria-current={r.id === activeRecipeId ? 'true' : undefined}
                 >
-                  ×
-                </button>
-              </div>
-            ))}
+                  <button type="button" className="saved-load" onClick={() => loadRecipe(r)}>
+                    <strong>{r.name}</strong>
+                    <span>
+                      {t('soap.savedMeta', {
+                        count: show(r.oils.length, 0),
+                        lye: r.lyeType === 'koh' ? 'KOH' : 'NaOH',
+                        sf: show(r.superfatPct, 2),
+                      })}
+                      {r.totalOilsWeight != null
+                        ? ` · ${show(r.totalOilsWeight, 2)} ${t('unit.' + r.unit)}`
+                        : ''}
+                      {savedAt ? ` · ${savedAt}` : ''}
+                    </span>
+                    {r.notes ? <span className="notes-chip">{t('common.notes')}</span> : null}
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    aria-label={t('common.deleteAria', { name: r.name })}
+                    onClick={() => handleDelete(r.id)}
+                  >
+                    ×
+                  </button>
+                </div>
+              )
+            })}
           </div>
         )}
       </section>
 
       <section className="card weight-of-oils-card">
         <div className="card-title-row">
-          <h3>Weight of oils</h3>
-          <span className="ceiling-badge" title="Recipe ceiling — oils must add up to this">
-            Ceiling
+          <h3>{t('soap.weightOfOils')}</h3>
+          <span className="ceiling-badge" title={t('soap.ceilingTitle')}>
+            {t('soap.ceiling')}
           </span>
         </div>
 
         <div className="total-oils-row">
           <label className="grow">
-            Total oils weight ({u})
+            {t('soap.totalOilsWeight', { unit: u })}
             <input
-              type="number"
+              type="text"
               min="0"
               step="any"
               inputMode="decimal"
+              autoComplete="off"
               value={totalOilsWeight}
               onChange={(e) => onTotalOilsChange(e.target.value)}
               placeholder={unit === 'lb' ? '2' : unit === 'oz' ? '32' : '1000'}
@@ -1103,46 +1177,43 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
               type="button"
               className="chip solid"
               onClick={scaleWeightsToCeiling}
-              title="Scale current oil weights so they sum to Total oils (keeps ratios)"
+              title={t('soap.scaleTitle')}
             >
-              Scale weights to total
+              {t('soap.scale')}
             </button>
             <button
               type="button"
               className="chip"
               onClick={applyPercentsToCeiling}
-              title="Set each oil weight from its % × Total oils"
+              title={t('soap.applyPctTitle')}
             >
-              Apply % to weights
+              {t('soap.applyPct')}
             </button>
           </div>
           <p className="hint full">
-            <strong>Total oils</strong> is the recipe ceiling — it does not change when you type individual oils.
-            Edit <strong>weight</strong> or <strong>%</strong> on any row (both always live). Changing one field
-            updates only that oil against the ceiling; other oils stay put. Results unlock when oil weights and
-            percentages both match this total (100%).
+            <RichText text={t('soap.ceilingHint')} />
           </p>
         </div>
 
         <div className="card-title-row oils-subhead">
-          <h3>Oils & butters</h3>
-          <div className="preset-row" role="group" aria-label="Recipe presets">
+          <h3>{t('soap.oilsButters')}</h3>
+          <div className="preset-row" role="group" aria-label={t('soap.presetsAria')}>
             <button
               type="button"
               className="chip solid custom-recipe-btn"
               onClick={startCustomRecipe}
-              title="Start empty — no oils or butters preloaded"
+              title={t('preset.customTitle')}
             >
-              Custom
+              {t('preset.custom')}
             </button>
             {PRESETS.map((p) => (
               <button
-                key={p.name}
+                key={p.id}
                 type="button"
                 className="chip"
-                onClick={() => applyPreset(p.oils, p.name)}
+                onClick={() => applyPreset(p.oils, t('preset.' + p.id))}
               >
-                {p.name}
+                {t('preset.' + p.id)}
               </button>
             ))}
           </div>
@@ -1150,44 +1221,49 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
 
         <div className="oil-table mode-dual">
           <div className="oil-head">
-            <span>Oil</span>
-            <span>Weight ({u})</span>
-            <span>% of total</span>
+            <span>{t('soap.colOil')}</span>
+            <span>{t('soap.colWeight', { unit: u })}</span>
+            <span>{t('soap.colPct')}</span>
             <span />
           </div>
           {rows.length === 0 && (
             <div className="oil-empty-state">
-              <p>No oils yet — this is a blank custom recipe.</p>
+              <p>{t('soap.noOils')}</p>
               <button type="button" className="chip solid" onClick={addRow}>
-                + Add first oil
+                {t('soap.addFirst')}
               </button>
             </div>
           )}
           {rows.map((row) => {
             const oil = getOil(row.oilId)
-            const linePctNum = parseFloat(row.pct) || 0
-            const overMax =
-              oil?.maxPct != null && linePctNum > 0 && linePctNum > oil.maxPct + 0.05
+            const oilName = oil ? oilDisplayName(t, oil.id, oil.name) : ''
+            const oilNotes = oil?.notes ? tx(t, `oil.${oil.id}.notes`, oil.notes) : ''
+            const linePctNum = num(row.pct) || 0
+            const overMax = oil?.maxPct != null && linePctNum > 0 && linePctNum > oil.maxPct + 0.05
             return (
               <div className="oil-row" key={row.key}>
                 <div className="oil-select-wrap">
                   <select
                     value={row.oilId}
                     onChange={(e) => updateRowOil(row.key, e.target.value)}
-                    aria-label="Select oil or butter"
+                    aria-label={t('soap.selectOilAria')}
                   >
-                    <option value="">— Select oil —</option>
-                    {OILS.map((o) => (
-                      <option key={o.id} value={o.id}>
-                        {o.name}
-                      </option>
+                    <option value="">{t('soap.selectOil')}</option>
+                    {OIL_GROUPS.map((group) => (
+                      <optgroup key={group.category} label={t('oilCat.' + group.category)}>
+                        {group.oils.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {oilDisplayName(t, o.id, o.name)}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                   <button
                     type="button"
                     className="info-chip"
-                    title={oil?.notes || 'Oil info'}
-                    aria-label={'Wiki: ' + (oil?.name || 'oil')}
+                    title={oilNotes || t('soap.oilInfo')}
+                    aria-label={t('soap.wikiAria', { name: oilName || t('tag.oil') })}
                     disabled={!row.oilId}
                     onClick={() => row.oilId && onOpenWiki?.('oil-' + row.oilId)}
                   >
@@ -1195,33 +1271,35 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
                   </button>
                 </div>
                 <input
-                  type="number"
+                  type="text"
                   className="weight-input"
                   min="0"
                   step="any"
                   inputMode="decimal"
+                  autoComplete="off"
                   value={row.amount}
                   onChange={(e) => updateRowWeight(row.key, e.target.value)}
-                  aria-label={'Weight ' + (oil?.name || '')}
+                  aria-label={t('soap.weightAria', { name: oilName })}
                 />
                 <div className="pct-input-wrap">
                   <input
-                    type="number"
+                    type="text"
                     min="0"
                     max="100"
                     step="any"
                     inputMode="decimal"
+                    autoComplete="off"
                     className={'pct-input' + (overMax ? ' warn-input' : '')}
                     value={row.pct}
                     onChange={(e) => updateRowPct(row.key, e.target.value)}
-                    aria-label={'Percent of total ' + (oil?.name || '')}
+                    aria-label={t('soap.pctAria', { name: oilName })}
                   />
                   <span className="pct-suffix">%</span>
                 </div>
                 <button
                   type="button"
                   className="icon-btn"
-                  aria-label="Remove oil"
+                  aria-label={t('soap.removeOil')}
                   onClick={() => removeRow(row.key)}
                 >
                   ×
@@ -1232,28 +1310,36 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
         </div>
         <div className="oil-table-footer">
           <button type="button" className="add-btn" onClick={addRow}>
-            + Add oil
+            {t('soap.addOil')}
           </button>
           <div className={pctStatusClass} role="status">
             <span>
-              Oil %: <strong>{fmtNum(pctSum, 2)}%</strong>
+              {t('soap.oilPct')} <strong>{show(pctSum, 2)}%</strong>
               {' · '}
-              Weights: <strong>{fmtNum(weightSum, 4)} {u}</strong>
+              {t('soap.weights')}{' '}
+              <strong>
+                {show(weightSum, 4)} {u}
+              </strong>
               {' / '}
-              <strong>{fmtNum(parsedTotalOils, 4)} {u}</strong>
+              <strong>
+                {show(parsedTotalOils, 4)} {u}
+              </strong>
             </span>
             <span className="pct-hint">
               {recipeBalanced
-                ? 'Unlocked — matches Total oils ceiling'
+                ? t('soap.statusUnlocked')
                 : !parsedTotalOils
-                  ? 'Set Total oils ceiling'
+                  ? t('soap.statusSetCeiling')
                   : !pctOk
                     ? pctDelta > 0
-                      ? fmtNum(pctDelta, 2) + '% over 100% — locked'
-                      : fmtNum(Math.abs(pctDelta), 2) + '% short of 100% — locked'
+                      ? t('soap.statusPctOver', { pct: show(pctDelta, 2) })
+                      : t('soap.statusPctShort', { pct: show(Math.abs(pctDelta), 2) })
                     : weightDelta > 0
-                      ? fmtNum(weightDelta, 4) + ' ' + u + ' over ceiling — locked'
-                      : fmtNum(Math.abs(weightDelta), 4) + ' ' + u + ' under ceiling — locked'}
+                      ? t('soap.statusWeightOver', { amount: show(weightDelta, 4), unit: u })
+                      : t('soap.statusWeightUnder', {
+                          amount: show(Math.abs(weightDelta), 4),
+                          unit: u,
+                        })}
             </span>
           </div>
         </div>
@@ -1261,22 +1347,21 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
 
       <section className="card additives-card">
         <div className="card-title-row">
-          <h3>Additives & add-ins</h3>
+          <h3>{t('soap.additivesTitle')}</h3>
           <button type="button" className="linkish" onClick={() => onOpenWiki?.('soap-additives')}>
-            Additive guide
+            {t('soap.additiveGuide')}
           </button>
         </div>
-        <p className="hint">
-          Ground oats, clays, milks, salts, sugars, botanicals — enter by weight ({u}) or spoon
-          (tsp/tbsp). Usage is checked as % of oils; amounts add to your batch total. Spoon
-          weights are approximate (powder packing varies).
-        </p>
-        {additiveRows.length === 0 && (
-          <p className="hint">None yet — pick an additive below (colloidal oats, kaolin, honey…).</p>
-        )}
+        <p className="hint">{t('soap.additivesHint', { unit: u })}</p>
+        {additiveRows.length === 0 && <p className="hint">{t('soap.noAdditives')}</p>}
         {additiveRows.map((row) => {
           const add = getAdditive(row.additiveId)
-          const amt = parseFloat(row.amount) || 0
+          const addName = add ? additiveDisplayName(t, add.id, add.name) : ''
+          const addBenefits = add ? tx(t, `additive.${add.id}.benefits`, add.benefits) : ''
+          const addCautions = add?.cautions ? tx(t, `additive.${add.id}.cautions`, add.cautions) : ''
+          const addPhase = add ? tx(t, `additive.${add.id}.phase`, add.phase) : ''
+          const addPpo = add?.ppo ? tx(t, `additive.${add.id}.ppo`, add.ppo) : ''
+          const amt = num(row.amount) || 0
           const amtInRecipe =
             row.additiveId && amt > 0
               ? additiveAmountInRecipeUnit(amt, row.amountUnit, unit, row.additiveId)
@@ -1285,29 +1370,33 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
             parsedTotalOils > 0 && amtInRecipe > 0 ? (amtInRecipe / parsedTotalOils) * 100 : 0
           const usage = add ? additiveUsageStatus(pctOfOils, add.usagePct) : 'n/a'
           const usageCls = usage === 'good' ? 'ok' : usage
+          const range = {
+            min: show(add?.usagePct.min ?? 0, 2),
+            max: show(add?.usagePct.max ?? 0, 2),
+          }
           const usageLabel =
             usage === 'good'
-              ? `OK · ${add!.usagePct.min}–${add!.usagePct.max}%`
+              ? t('soap.usageOk', range)
               : usage === 'low'
-                ? `Low · ${add!.usagePct.min}–${add!.usagePct.max}%`
+                ? t('soap.usageLow', range)
                 : usage === 'high'
-                  ? `High · max ${add!.usagePct.max}%`
-                  : '—'
+                  ? t('soap.usageHigh', { max: range.max })
+                  : t('common.dash')
           const usageTitle =
             usage === 'good'
-              ? `Within recommended ${add!.usagePct.min}–${add!.usagePct.max}% of oils`
+              ? t('soap.usageWithin', range)
               : usage === 'low'
-                ? `Below recommended ${add!.usagePct.min}–${add!.usagePct.max}% of oils`
+                ? t('soap.usageBelow', range)
                 : usage === 'high'
-                  ? `Above recommended ${add!.usagePct.min}–${add!.usagePct.max}% of oils`
-                  : 'Enter an amount to check usage'
+                  ? t('soap.usageAbove', range)
+                  : t('soap.usageEnter')
           const metaBits = [
-            add?.ppo ? `${add.ppo} PPO` : null,
-            add?.phase || null,
+            addPpo ? t('soap.ppo', { ppo: addPpo }) : null,
+            addPhase || null,
             amtInRecipe > 0 && isAdditiveVolumeUnit(row.amountUnit)
-              ? `≈ ${fmtNum(amtInRecipe, 3)} ${u}`
+              ? t('soap.approx', { amount: show(amtInRecipe, 3), unit: u })
               : null,
-            pctOfOils > 0 ? `${fmtNum(pctOfOils, 2)}% of oils` : null,
+            pctOfOils > 0 ? t('soap.ofOils', { pct: show(pctOfOils, 2) }) : null,
           ].filter(Boolean)
           return (
             <div className="additive-row" key={row.key}>
@@ -1315,14 +1404,18 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
                 <select
                   value={row.additiveId}
                   onChange={(e) => updateAdditiveId(row.key, e.target.value)}
-                  aria-label="Select additive"
+                  aria-label={t('soap.selectAdditiveAria')}
                 >
-                  <option value="">— Select additive —</option>
-                  {Object.entries(ADDITIVE_CATEGORY_LABELS).map(([cat, label]) => (
-                    <optgroup key={cat} label={label}>
+                  <option value="">{t('soap.selectAdditive')}</option>
+                  {Object.entries(ADDITIVE_CATEGORY_LABELS).map(([cat]) => (
+                    <optgroup key={cat} label={t('additiveCat.' + cat)}>
                       {ADDITIVES.filter((a) => a.category === cat).map((a) => (
                         <option key={a.id} value={a.id}>
-                          {a.name} ({a.usagePct.min}–{a.usagePct.max}%)
+                          {t('soap.additiveOption', {
+                            name: additiveDisplayName(t, a.id, a.name),
+                            min: show(a.usagePct.min, 2),
+                            max: show(a.usagePct.max, 2),
+                          })}
                         </option>
                       ))}
                     </optgroup>
@@ -1331,8 +1424,8 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
                 <button
                   type="button"
                   className="info-chip"
-                  title={add?.benefits || 'Additive info'}
-                  aria-label={'Wiki: ' + (add?.name || 'additive')}
+                  title={addBenefits || t('soap.additiveInfo')}
+                  aria-label={t('soap.wikiAria', { name: addName || t('soap.additiveInfo') })}
                   disabled={!row.additiveId}
                   onClick={() => row.additiveId && onOpenWiki?.('soap-additives')}
                 >
@@ -1341,14 +1434,15 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
               </div>
               <div className="pct-input-wrap additive-amount-wrap">
                 <input
-                  type="number"
+                  type="text"
                   min="0"
                   step="any"
                   inputMode="decimal"
+                  autoComplete="off"
                   className="weight-input"
                   value={row.amount}
                   onChange={(e) => updateAdditiveAmount(row.key, e.target.value)}
-                  aria-label={'Amount ' + (add?.name || '')}
+                  aria-label={t('soap.amountAria', { name: addName })}
                   placeholder="0"
                 />
                 <select
@@ -1357,14 +1451,14 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
                   onChange={(e) =>
                     updateAdditiveAmountUnit(row.key, e.target.value as AdditiveAmountUnit)
                   }
-                  aria-label={'Unit for ' + (add?.name || 'additive')}
+                  aria-label={t('soap.unitAria', { name: addName || t('soap.additiveInfo') })}
                 >
-                  <option value={unit}>{unitLabel(unit)}</option>
-                  {unit !== 'g' && <option value="g">g</option>}
-                  {unit !== 'oz' && <option value="oz">oz</option>}
-                  {unit !== 'lb' && <option value="lb">lb</option>}
-                  <option value="tsp">tsp</option>
-                  <option value="tbsp">tbsp</option>
+                  <option value={unit}>{t('unit.' + unit)}</option>
+                  {unit !== 'g' && <option value="g">{t('unit.g')}</option>}
+                  {unit !== 'oz' && <option value="oz">{t('unit.oz')}</option>}
+                  {unit !== 'lb' && <option value="lb">{t('unit.lb')}</option>}
+                  <option value="tsp">{t('unit.tsp')}</option>
+                  <option value="tbsp">{t('unit.tbsp')}</option>
                 </select>
               </div>
               <span className={'additive-status ' + usageCls} title={usageTitle}>
@@ -1373,13 +1467,13 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
               <button
                 type="button"
                 className="icon-btn"
-                aria-label="Remove additive"
+                aria-label={t('soap.removeAdditive')}
                 onClick={() => removeAdditiveRow(row.key)}
               >
                 ×
               </button>
               {metaBits.length > 0 && (
-                <p className="additive-meta" title={add?.cautions || add?.benefits || undefined}>
+                <p className="additive-meta" title={addCautions || addBenefits || undefined}>
                   {metaBits.join(' · ')}
                 </p>
               )}
@@ -1393,92 +1487,102 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
             onChange={(e) => {
               if (e.target.value) addAdditiveRow(e.target.value)
             }}
-            aria-label="Add additive"
+            aria-label={t('soap.addAdditiveAria')}
           >
-            <option value="">+ Add additive…</option>
-            {Object.entries(ADDITIVE_CATEGORY_LABELS).map(([cat, label]) => (
-              <optgroup key={cat} label={label}>
+            <option value="">{t('soap.addAdditivePlaceholder')}</option>
+            {Object.entries(ADDITIVE_CATEGORY_LABELS).map(([cat]) => (
+              <optgroup key={cat} label={t('additiveCat.' + cat)}>
                 {ADDITIVES.filter((a) => a.category === cat).map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.name} ({a.usagePct.min}–{a.usagePct.max}%)
+                    {t('soap.additiveOption', {
+                      name: additiveDisplayName(t, a.id, a.name),
+                      min: show(a.usagePct.min, 2),
+                      max: show(a.usagePct.max, 2),
+                    })}
                   </option>
                 ))}
               </optgroup>
             ))}
           </select>
           <button type="button" className="add-btn" onClick={() => addAdditiveRow()}>
-            + Additive
+            {t('soap.addAdditive')}
           </button>
         </div>
       </section>
 
       <div className="split-grid">
         <section className="card">
-          <h3>Lye & superfat</h3>
+          <h3>{t('soap.lyeSuperfat')}</h3>
           <div className="field-grid">
             <label>
-              Lye type
+              {t('soap.lyeType')}
               <select value={lyeType} onChange={(e) => setLyeType(e.target.value as LyeType)}>
-                <option value="naoh">NaOH (bar)</option>
-                <option value="koh">KOH (liquid)</option>
+                <option value="naoh">{t('lye.naoh')}</option>
+                <option value="koh">{t('lye.koh')}</option>
               </select>
             </label>
             <label>
-              Superfat %
+              {t('soap.superfatPct')}
               <input
-                type="number"
+                type="text"
                 min="0"
                 max="20"
                 step="0.5"
+                inputMode="decimal"
+                autoComplete="off"
                 value={superfatPct}
                 onChange={(e) => setSuperfatPct(e.target.value)}
               />
             </label>
             <label>
-              Fragrance % of oils
+              {t('soap.foPctOils')}
               <input
-                type="number"
+                type="text"
                 min="0"
                 max="10"
                 step="0.1"
+                inputMode="decimal"
+                autoComplete="off"
                 value={fragrancePct}
                 onChange={(e) => setFragrancePct(e.target.value)}
               />
             </label>
             <p className="hint full">
               <button type="button" className="linkish" onClick={() => onOpenWiki?.('soap-superfat')}>
-                Superfat guide
+                {t('soap.superfatGuide')}
               </button>
               {' · '}
               <button type="button" className="linkish" onClick={() => onOpenWiki?.('soap-lye-safety')}>
-                Lye safety
+                {t('soap.lyeSafety')}
               </button>
             </p>
           </div>
         </section>
 
         <section className="card">
-          <h3>Water</h3>
+          <h3>{t('soap.water')}</h3>
           <div className="field-grid">
             <label className="full">
-              Method
+              {t('soap.method')}
               <select
                 value={waterMethod}
                 onChange={(e) => setWaterMethod(e.target.value as WaterMethod)}
               >
-                <option value="percent_oils">Water as % of oils</option>
-                <option value="lye_concentration">Lye concentration</option>
-                <option value="discount">Water discount (from 38%)</option>
+                <option value="percent_oils">{t('water.percent_oils')}</option>
+                <option value="lye_concentration">{t('water.lye_concentration')}</option>
+                <option value="discount">{t('water.discount')}</option>
               </select>
             </label>
             {waterMethod === 'percent_oils' && (
               <label>
-                Water % of oils
+                {t('soap.waterPctLabel')}
                 <input
-                  type="number"
+                  type="text"
                   min="20"
                   max="45"
                   step="0.5"
+                  inputMode="decimal"
+                  autoComplete="off"
                   value={waterAsPercentOfOils}
                   onChange={(e) => setWaterAsPercentOfOils(e.target.value)}
                 />
@@ -1486,12 +1590,14 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
             )}
             {waterMethod === 'lye_concentration' && (
               <label>
-                Lye concentration %
+                {t('soap.lyeConcLabel')}
                 <input
-                  type="number"
+                  type="text"
                   min="25"
                   max="50"
                   step="0.5"
+                  inputMode="decimal"
+                  autoComplete="off"
                   value={lyeConcentrationPct}
                   onChange={(e) => setLyeConcentrationPct(e.target.value)}
                 />
@@ -1499,12 +1605,14 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
             )}
             {waterMethod === 'discount' && (
               <label>
-                Water discount %
+                {t('soap.waterDiscountLabel')}
                 <input
-                  type="number"
+                  type="text"
                   min="0"
                   max="40"
                   step="1"
+                  inputMode="decimal"
+                  autoComplete="off"
                   value={waterDiscountPct}
                   onChange={(e) => setWaterDiscountPct(e.target.value)}
                 />
@@ -1512,7 +1620,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
             )}
             <p className="hint full">
               <button type="button" className="linkish" onClick={() => onOpenWiki?.('soap-water')}>
-                Water methods explained
+                {t('soap.waterMethods')}
               </button>
             </p>
           </div>
@@ -1521,109 +1629,111 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
 
       <section className={'card results-card' + (result.locked ? ' results-locked' : '')}>
         <div className="card-title-row">
-          <h3>Batch results</h3>
+          <h3>{t('soap.batchResults')}</h3>
           <div className="toolbar-btns">
             <button type="button" className="chip" onClick={handleCopy} disabled={!!result.locked}>
-              Copy results
+              {t('common.copyResults')}
             </button>
           </div>
         </div>
         {result.warnings.length > 0 && (
           <ul className="warnings">
             {result.warnings.map((w) => (
-              <li key={w}>{w}</li>
+              <li key={w}>{localizeRuntimeMessage(w, t, intlLocale)}</li>
             ))}
           </ul>
         )}
         <div className="stat-grid">
           <div className="stat hero">
-            <span className="stat-label">{lyeType === 'naoh' ? 'NaOH' : 'KOH'} (with SF)</span>
+            <span className="stat-label">{t('soap.lyeWithSf', { lye: lyeToken })}</span>
             <span className="stat-value">
-              {result.locked ? '—' : result.lyeWithSuperfat}
+              {result.locked ? t('common.dash') : show(result.lyeWithSuperfat, 2)}
               <small>{u}</small>
             </span>
           </div>
           <div className="stat">
-            <span className="stat-label">Water</span>
+            <span className="stat-label">{t('soap.water')}</span>
             <span className="stat-value">
-              {result.locked ? '—' : result.water}
+              {result.locked ? t('common.dash') : show(result.water, 2)}
               <small>{u}</small>
             </span>
           </div>
           <div className="stat">
-            <span className="stat-label">Lye solution</span>
+            <span className="stat-label">{t('soap.lyeSolution')}</span>
             <span className="stat-value">
-              {result.locked ? '—' : result.lyeSolution}
+              {result.locked ? t('common.dash') : show(result.lyeSolution, 2)}
               <small>{u}</small>
             </span>
           </div>
           <div className="stat">
-            <span className="stat-label">Fragrance</span>
+            <span className="stat-label">{t('soap.fragrance')}</span>
             <span className="stat-value">
-              {result.locked ? '—' : result.fragrance}
+              {result.locked ? t('common.dash') : show(result.fragrance, 2)}
               <small>{u}</small>
             </span>
           </div>
           <div className="stat">
-            <span className="stat-label">Total oils</span>
+            <span className="stat-label">{t('soap.totalOils')}</span>
             <span className="stat-value">
-              {result.locked ? fmtNum(parsedTotalOils, 2) : result.totalOils}
+              {result.locked ? show(parsedTotalOils, 2) : show(result.totalOils, 2)}
               <small>{u}</small>
             </span>
           </div>
           <div className="stat">
-            <span className="stat-label">Batch total</span>
+            <span className="stat-label">{t('soap.batchTotal')}</span>
             <span className="stat-value">
-              {result.locked ? '—' : result.totalBatch}
+              {result.locked ? t('common.dash') : show(result.totalBatch, 2)}
               <small>{u}</small>
             </span>
           </div>
           <div className="stat">
-            <span className="stat-label">Additives</span>
+            <span className="stat-label">{t('soap.additives')}</span>
             <span className="stat-value">
-              {result.locked ? '—' : result.additiveTotal}
+              {result.locked ? t('common.dash') : show(result.additiveTotal, 2)}
               <small>{u}</small>
             </span>
           </div>
         </div>
         <div className="meta-row">
           <span>
-            Pure lye 0% SF:{' '}
-            <strong>{result.locked ? '—' : result.pureLye + ' ' + u}</strong>
+            {t('soap.pureLyeLabel')}{' '}
+            <strong>
+              {result.locked ? t('common.dash') : show(result.pureLye, 2) + ' ' + u}
+            </strong>
           </span>
           {result.weightedIodine != null && (
             <span>
-              Iodine: <strong>{result.weightedIodine}</strong>
+              {t('soap.iodineLabel')} <strong>{show(result.weightedIodine, 1)}</strong>
             </span>
           )}
           {result.weightedIns != null && (
             <span>
-              INS: <strong>{result.weightedIns}</strong>
+              {t('soap.insLabel')} <strong>{show(result.weightedIns, 1)}</strong>
             </span>
           )}
         </div>
         {!result.locked && quality.length > 0 && (
           <div className="quality-panel">
             <div className="quality-head">
-              <h4>Quality profile</h4>
+              <h4>{t('soap.quality')}</h4>
               <button
                 type="button"
                 className="linkish"
                 onClick={() => onOpenWiki?.('soap-quality')}
               >
-                How to read this
+                {t('soap.howToRead')}
               </button>
             </div>
             <div className="quality-grid">
               {quality.map((q) => (
                 <div key={q.key} className={'quality-metric ' + q.status}>
                   <div className="quality-top">
-                    <span className="quality-label">{q.label}</span>
+                    <span className="quality-label">{t('quality.' + q.key + '.label')}</span>
                     <span className="quality-value">
-                      {q.value == null ? '—' : q.value}
+                      {q.value == null ? t('common.dash') : show(q.value, 1)}
                       <small>
                         {' '}
-                        ideal {q.min}–{q.max}
+                        {t('soap.ideal', { min: show(q.min, 0), max: show(q.max, 0) })}
                       </small>
                     </span>
                   </div>
@@ -1634,39 +1744,44 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
                       style={{ left: qualityBarPos(q) + '%' }}
                       title={
                         q.status === 'good'
-                          ? 'In ideal range'
+                          ? t('soap.inRange')
                           : q.status === 'low'
-                            ? 'Below ideal range'
-                            : 'Above ideal range'
+                            ? t('soap.belowIdeal')
+                            : t('soap.aboveIdeal')
                       }
                     />
                   </div>
-                  {q.status !== 'good' && <p className="quality-hint">{q.hint}</p>}
+                  {q.status !== 'good' && (
+                    <p className="quality-hint">{t('quality.' + q.key + '.hint')}</p>
+                  )}
                 </div>
               ))}
             </div>
             {satRatio != null && (
               <p className="quality-ratio">
-                Saturated : unsaturated ≈{' '}
-                <strong>
-                  {fmtNum(satRatio.sat, 0)}:{fmtNum(satRatio.unsat, 0)}
-                </strong>{' '}
-                — a typical balanced bar sits near 40:60.
+                {t('soap.satRatio', {
+                  sat: show(satRatio.sat, 0),
+                  unsat: show(satRatio.unsat, 0),
+                })}
               </p>
             )}
           </div>
         )}
         {!result.locked && result.oilBreakdown.length > 0 && (
           <div className="breakdown">
-            <h4>Oil breakdown</h4>
+            <h4>{t('soap.oilBreakdown')}</h4>
             <ul>
               {result.oilBreakdown.map((b) => (
                 <li key={b.oilId + b.name}>
-                  <button type="button" className="linkish" onClick={() => onOpenWiki?.('oil-' + b.oilId)}>
-                    {b.name}
+                  <button
+                    type="button"
+                    className="linkish"
+                    onClick={() => onOpenWiki?.('oil-' + b.oilId)}
+                  >
+                    {oilDisplayName(t, b.oilId, b.name)}
                   </button>
                   <span>
-                    {b.amount} {u} · {b.pct}%
+                    {show(b.amount, 2)} {u} · {show(b.pct, 1)}%
                   </span>
                 </li>
               ))}
@@ -1675,7 +1790,7 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
         )}
         {!result.locked && result.additives.length > 0 && (
           <div className="breakdown">
-            <h4>Additives & add-ins</h4>
+            <h4>{t('soap.additivesBreakdown')}</h4>
             <ul>
               {result.additives.map((a) => (
                 <li key={a.additiveId}>
@@ -1684,24 +1799,39 @@ export function SoapCalculator({ onOpenWiki, onToast }: SoapCalculatorProps) {
                     className="linkish"
                     onClick={() => onOpenWiki?.('soap-additives')}
                   >
-                    {a.name}
+                    {additiveDisplayName(t, a.additiveId, a.name)}
                   </button>
                   <span
                     className={'additive-status ' + a.status}
                     title={
                       a.status === 'ok'
-                        ? `Within ${a.usageMin}–${a.usageMax}% of oils`
+                        ? t('soap.withinShort', {
+                            min: show(a.usageMin, 2),
+                            max: show(a.usageMax, 2),
+                          })
                         : a.status === 'low'
-                          ? `Below recommended ${a.usageMin}–${a.usageMax}% of oils`
-                          : `Above recommended ${a.usageMin}–${a.usageMax}% of oils`
+                          ? t('soap.usageBelow', {
+                              min: show(a.usageMin, 2),
+                              max: show(a.usageMax, 2),
+                            })
+                          : t('soap.usageAbove', {
+                              min: show(a.usageMin, 2),
+                              max: show(a.usageMax, 2),
+                            })
                     }
                   >
-                    {a.amount} {u} · {a.pctOfOils}% ·{' '}
+                    {show(a.amount, 2)} {u} · {show(a.pctOfOils, 2)}% ·{' '}
                     {a.status === 'ok'
-                      ? `OK ${a.usageMin}–${a.usageMax}%`
+                      ? t('soap.okShort', {
+                          min: show(a.usageMin, 2),
+                          max: show(a.usageMax, 2),
+                        })
                       : a.status === 'low'
-                        ? `Low ${a.usageMin}–${a.usageMax}%`
-                        : `High max ${a.usageMax}%`}
+                        ? t('soap.lowShort', {
+                            min: show(a.usageMin, 2),
+                            max: show(a.usageMax, 2),
+                          })
+                        : t('soap.highShort', { max: show(a.usageMax, 2) })}
                   </span>
                 </li>
               ))}

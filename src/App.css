@@ -124,6 +124,13 @@
   text-transform: uppercase;
 }
 
+html[lang='ja'] .tagline,
+html[lang='ko'] .tagline,
+html[lang='zh-CN'] .tagline {
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 .hero-strip {
   position: relative;
   z-index: 1;
@@ -203,7 +210,7 @@
   border: 1px solid var(--border);
   border-radius: 999px;
   padding: 4px;
-  min-width: 220px;
+  min-width: min(220px, 100%);
   backdrop-filter: blur(12px);
 }
 
@@ -217,6 +224,7 @@
   font-weight: 600;
   font-size: 0.9rem;
   padding: 0.55rem 1rem;
+  white-space: normal;
   border-radius: 999px;
   cursor: pointer;
   display: inline-flex;
@@ -505,6 +513,7 @@ label select:focus,
   font-size: 0.8rem;
   color: var(--muted);
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 /* Oil table */
@@ -982,7 +991,8 @@ label select:focus,
   grid-area: status;
   font-size: 0.72rem;
   font-weight: 650;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
   padding: 0.18rem 0.5rem;
   border-radius: 999px;
   border: 1px solid transparent;
@@ -1291,7 +1301,8 @@ label select:focus,
 }
 .toolbar-btns .chip,
 .recipe-actions .chip {
-  white-space: nowrap;
+  white-space: normal;
+  text-align: center;
 }
 .saved-list {
   display: flex;
