@@ -12,6 +12,32 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Alex's Craft Calc — Soap & Candle</title>
+    <script>
+      (function () {
+        var known = ['en','es','fr','de','pt-BR','it','ru','pl','ja','ko','zh-CN']
+        function match(tags) {
+          for (var i = 0; i < tags.length; i++) {
+            var tag = String(tags[i] || '').toLowerCase()
+            if (!tag) continue
+            if (tag === 'pt' || tag.indexOf('pt-') === 0) return 'pt-BR'
+            if (tag === 'zh' || tag === 'zh-cn' || tag.indexOf('zh-hans') === 0 || tag === 'zh-sg') return 'zh-CN'
+            if (tag === 'zh-tw' || tag === 'zh-hk' || tag.indexOf('zh-hant') === 0 || tag === 'zh-mo') continue
+            var primary = tag.split('-')[0]
+            if (primary === 'en') return 'en'
+            if (known.indexOf(primary) >= 0) return primary
+          }
+          return 'en'
+        }
+        var loc = 'en'
+        try {
+          var raw = localStorage.getItem('alien-craft-prefs')
+          var prefs = raw ? JSON.parse(raw) : null
+          if (prefs && known.indexOf(prefs.locale) >= 0) loc = prefs.locale
+          else if (!raw) loc = match(navigator.languages || [navigator.language])
+        } catch (e) {}
+        document.documentElement.lang = loc
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -6,6 +6,18 @@
   gap: 0.65rem;
 }
 
+.lang-select select {
+  max-width: 14rem;
+  border: 1px solid var(--border);
+  background: rgba(20, 8, 36, 0.65);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 0.5rem 1.8rem 0.5rem 0.85rem;
+  font: inherit;
+  font-weight: 650;
+  font-size: 0.85rem;
+}
+
 .help-btn {
   display: inline-flex;
   align-items: center;
@@ -789,15 +801,16 @@
 
 .wiki-cats {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.35rem;
-  overflow-x: auto;
+  overflow-x: visible;
   padding: 0.55rem 1rem;
   border-bottom: 1px solid rgba(186, 120, 255, 0.12);
   scrollbar-width: thin;
 }
 
 .wiki-cats button {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   border: 1px solid var(--border);
   background: rgba(12, 4, 24, 0.4);
   color: var(--muted);
@@ -805,7 +818,8 @@
   padding: 0.35rem 0.7rem;
   font-size: 0.75rem;
   font-weight: 650;
-  white-space: nowrap;
+  white-space: normal;
+  text-align: center;
 }
 
 .wiki-cats button.active {
@@ -1099,6 +1113,14 @@
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+html[lang='ja'] .wiki-section h4,
+html[lang='ko'] .wiki-section h4,
+html[lang='zh-CN'] .wiki-section h4 {
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .wiki-section h4 {
@@ -1158,6 +1180,7 @@
   .hero-strip,
   .mode-toggle,
   .help-btn,
+  .lang-select,
   .fab-help,
   .toast,
   .wiki-root,

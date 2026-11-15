@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
+import { LanguageSelect } from './components/LanguageSelect'
 import { ModeToggle } from './components/ModeToggle'
 import { SoapCalculator } from './components/SoapCalculator'
 import { CandleCalculator } from './components/CandleCalculator'
 import { Wiki } from './components/Wiki'
-import { Toast } from './components/Toast'
+import { Toast, type ToastTone } from './components/Toast'
+import { useI18n } from './i18n/I18nProvider'
 import './App.css'
 import './wiki-polish.css'
 
@@ -30,10 +32,11 @@ function writeMode(mode: Mode) {
 }
 
 export default function App() {
+  const { t } = useI18n()
   const [mode, setMode] = useState<Mode>(() => readMode())
   const [wikiOpen, setWikiOpen] = useState(false)
   const [wikiId, setWikiId] = useState<string | null>(null)
-  const [toast, setToast] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ text: string; tone?: ToastTone } | null>(null)
 
   useEffect(() => {
     writeMode(mode)
@@ -82,7 +85,9 @@ export default function App() {
     }
   }, [wikiOpen])
 
-  const showToast = useCallback((msg: string) => setToast(msg), [])
+  const showToast = useCallback((msg: string, tone?: ToastTone) => {
+    setToast({ text: msg, tone })
+  }, [])
 
   return (
     <div className="app-shell">
@@ -117,7 +122,7 @@ export default function App() {
           </div>
           <div>
             <h1>Alex&apos;s Craft Calc</h1>
-            <p className="tagline">Soap · Candle · Precision in purple</p>
+            <p className="tagline">{t('app.tagline')}</p>
           </div>
         </div>
         <div className="header-right">
@@ -125,12 +130,13 @@ export default function App() {
             type="button"
             className="help-btn"
             onClick={() => openWiki()}
-            title="Craft wiki (F1)"
+            title={t('header.wikiTitle')}
             aria-keyshortcuts="F1"
           >
             <span className="help-key">F1</span>
-            <span>Wiki</span>
+            <span>{t('header.wiki')}</span>
           </button>
+          <LanguageSelect />
           <ModeToggle mode={mode} onChange={setMode} />
         </div>
       </header>
@@ -155,27 +161,24 @@ export default function App() {
 
       <footer className="app-footer">
         <p>
-          Everyday craft math · NaOH/KOH SAP · fragrance loads · press{' '}
+          {t('footer.beforeF1')}{' '}
           <button type="button" className="footer-f1" onClick={() => openWiki()}>
             F1
           </button>{' '}
-          for the craft wiki · works offline as an installed app
+          {t('footer.afterF1')}
         </p>
-        <p className="disclaimer">
-          Always verify SAP values with your oil supplier. Lye is caustic — wear PPE. Fragrance %
-          limits vary by IFRA and wax brand.
-        </p>
+        <p className="disclaimer">{t('footer.disclaimer')}</p>
       </footer>
 
       <Wiki open={wikiOpen} onClose={closeWiki} initialId={wikiId} />
-      <Toast message={toast} onDone={() => setToast(null)} />
+      <Toast message={toast?.text ?? null} tone={toast?.tone} onDone={() => setToast(null)} />
 
       <button
         type="button"
         className="fab-help"
         onClick={() => openWiki()}
-        aria-label="Open craft wiki"
-        title="Craft wiki (F1)"
+        aria-label={t('header.openWiki')}
+        title={t('header.wikiTitle')}
       >
         ?
       </button>

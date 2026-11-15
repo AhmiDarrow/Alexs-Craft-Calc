@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "test": "tsx src/lib/calc.test.ts",
+    "test": "tsx src/lib/calc.test.ts && tsx src/lib/parseDecimal.test.ts && tsx src/i18n/locale.test.ts && tsx src/i18n/check.test.ts",
+    "i18n:extract": "tsx scripts/i18n-extract.ts",
     "icons": "node scripts/make-icons.mjs",
     "lint": "oxlint",
     "preview": "vite preview",

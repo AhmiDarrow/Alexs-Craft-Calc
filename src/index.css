@@ -19,7 +19,7 @@
   --shadow: 0 20px 60px rgba(80, 0, 140, 0.35);
   --radius: 18px;
   --radius-sm: 12px;
-  --font: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font: 'Segoe UI', 'Yu Gothic UI', Meiryo, 'Malgun Gothic', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK JP', 'Noto Sans JP', 'Noto Sans KR', 'Noto Sans CJK KR', 'Noto Sans SC', 'Noto Sans CJK SC', 'Noto Sans CJK', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --mono: 'Cascadia Code', 'Consolas', ui-monospace, monospace;
   font-family: var(--font);
   line-height: 1.45;

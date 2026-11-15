@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { VESSEL_PRESETS, WAXES, getWax } from '../data/waxes'
 import {
   calculateCandle,
@@ -7,6 +7,7 @@ import {
   type CandleInput,
   type WeightUnit,
 } from '../lib/candleCalc'
+import { countOf, parseUserDecimal } from '../lib/parseDecimal'
 import {
   copyText,
   currentCandleSnapshot,
@@ -16,14 +17,27 @@ import {
 } from '../lib/storage'
 import { escapeHtml } from '../lib/htmlEscape'
 import { useCandleRecipeIO } from '../hooks/useCandleRecipeIO'
+import { formatEditable, formatNumber, formatTempF, reformatEditable } from '../i18n/format'
+import { useI18n } from '../i18n/I18nProvider'
+import {
+  displayTag,
+  formatPourHint,
+  formatWickHint,
+  localizeWax,
+  vesselLabel,
+  waxDisplayName,
+} from '../i18n/content'
+import { importHasChanges, localizeImportSummary, localizeRuntimeMessage } from '../i18n/runtimeMessages'
 import { waxWikiId } from './Wiki'
+import type { ToastFn } from './Toast'
 
 interface CandleCalculatorProps {
   onOpenWiki?: (articleId?: string) => void
-  onToast?: (msg: string) => void
+  onToast?: ToastFn
 }
 
 export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps) {
+  const { t, intlLocale } = useI18n()
   const [waxId, setWaxId] = useState('soy-111')
   const [vesselCount, setVesselCount] = useState('4')
   const [waxPerVessel, setWaxPerVessel] = useState('200')
@@ -37,6 +51,18 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
   const [recipeName, setRecipeName] = useState('')
   const [recipeNotes, setRecipeNotes] = useState('')
   const importRef = useRef<HTMLInputElement>(null)
+  const localeRef = useRef(intlLocale)
+  useEffect(() => {
+    const prev = localeRef.current
+    if (prev === intlLocale) return
+    localeRef.current = intlLocale
+    setWaxPerVessel((raw) => reformatEditable(raw, prev, intlLocale, 2))
+    setTotalWax((raw) => reformatEditable(raw, prev, intlLocale, 2))
+    setFragrancePct((raw) => reformatEditable(raw, prev, intlLocale, 2))
+    setDyeBlocksPerLb((raw) => reformatEditable(raw, prev, intlLocale, 2))
+    setVesselDiameterIn((raw) => reformatEditable(raw, prev, intlLocale, 2))
+    setVesselCount((raw) => reformatEditable(raw, prev, intlLocale, 0))
+  }, [intlLocale])
   const {
     saved,
     showSaved,
@@ -50,19 +76,28 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
     shareAll,
   } = useCandleRecipeIO(onToast)
 
+  const num = (raw: string) => {
+    const n = parseUserDecimal(raw, intlLocale)
+    return Number.isFinite(n) ? n : NaN
+  }
+  const edit = (n: number, places: number) => formatEditable(n, intlLocale, places)
+  const show = (n: number, places: number) => formatNumber(n, intlLocale, places)
+
   const selectedWax = getWax(waxId)
 
+  // Field text stays in the previous locale until the effect above rewrites it.
+  // That setState reparses; doing it here would misread grouped values like "1,000".
   const input: CandleInput = useMemo(
     () => ({
       waxId,
-      vesselCount: parseInt(vesselCount, 10) || 1,
-      waxPerVessel: parseFloat(waxPerVessel) || 0,
+      vesselCount: countOf(vesselCount, intlLocale),
+      waxPerVessel: num(waxPerVessel) || 0,
       useTotalWax,
-      totalWax: parseFloat(totalWax) || 0,
-      fragrancePct: parseFloat(fragrancePct) || 0,
-      dyeBlocksPerLb: parseFloat(dyeBlocksPerLb) || 0,
+      totalWax: num(totalWax) || 0,
+      fragrancePct: num(fragrancePct) || 0,
+      dyeBlocksPerLb: num(dyeBlocksPerLb) || 0,
       unit,
-      vesselDiameterIn: parseFloat(vesselDiameterIn) || 0,
+      vesselDiameterIn: num(vesselDiameterIn) || 0,
     }),
     [
       waxId,
@@ -82,7 +117,7 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
   function onWaxChange(id: string) {
     setWaxId(id)
     const w = getWax(id)
-    if (w) setFragrancePct(String(w.fragranceTypical))
+    if (w) setFragrancePct(edit(w.fragranceTypical, 2))
   }
 
   function applyVesselPreset(id: string) {
@@ -92,26 +127,26 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
     // fillOz is approximate wax fill weight in oz
     const waxInUnit = fromOz(p.fillOz, unit)
     setUseTotalWax(false)
-    setWaxPerVessel(String(Math.round(waxInUnit * 100) / 100))
+    setWaxPerVessel(edit(waxInUnit, 2))
     // rough diameter defaults by vessel class
-    if (id.startsWith('pillar-3')) setVesselDiameterIn('3')
-    else if (id === 'tealight') setVesselDiameterIn('1.5')
-    else if (id === 'votive') setVesselDiameterIn('1.75')
-    else if (id === '4oz') setVesselDiameterIn('2.5')
-    else if (id === '6oz') setVesselDiameterIn('2.75')
-    else if (id === '8oz' || id === '9oz') setVesselDiameterIn('3')
-    else if (id === '10oz' || id === '12oz') setVesselDiameterIn('3.25')
-    else if (id === '16oz') setVesselDiameterIn('3.5')
+    if (id.startsWith('pillar-3')) setVesselDiameterIn(edit(3, 2))
+    else if (id === 'tealight') setVesselDiameterIn(edit(1.5, 2))
+    else if (id === 'votive') setVesselDiameterIn(edit(1.75, 2))
+    else if (id === '4oz') setVesselDiameterIn(edit(2.5, 2))
+    else if (id === '6oz') setVesselDiameterIn(edit(2.75, 2))
+    else if (id === '8oz' || id === '9oz') setVesselDiameterIn(edit(3, 2))
+    else if (id === '10oz' || id === '12oz') setVesselDiameterIn(edit(3.25, 2))
+    else if (id === '16oz') setVesselDiameterIn(edit(3.5, 2))
   }
 
   function onUnitChange(next: WeightUnit) {
     if (next === unit) return
     const convert = (val: string) => {
-      const n = parseFloat(val)
+      const n = num(val)
       if (!Number.isFinite(n)) return val
       const oz = unit === 'oz' ? n : unit === 'g' ? n / 28.349523125 : n * 16
       const out = next === 'oz' ? oz : next === 'g' ? oz * 28.349523125 : oz / 16
-      return String(Math.round(out * 100) / 100)
+      return edit(out, 2)
     }
     setWaxPerVessel(convert(waxPerVessel))
     setTotalWax(convert(totalWax))
@@ -121,33 +156,33 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
   function resetDefaults() {
     const d = defaultCandleInput()
     setWaxId(d.waxId)
-    setVesselCount(String(d.vesselCount))
-    setWaxPerVessel(String(d.waxPerVessel))
+    setVesselCount(edit(d.vesselCount, 0))
+    setWaxPerVessel(edit(d.waxPerVessel, 2))
     setUseTotalWax(d.useTotalWax)
-    setTotalWax(String(d.totalWax))
-    setFragrancePct(String(d.fragrancePct))
-    setDyeBlocksPerLb(String(d.dyeBlocksPerLb))
+    setTotalWax(edit(d.totalWax, 2))
+    setFragrancePct(edit(d.fragrancePct, 2))
+    setDyeBlocksPerLb(edit(d.dyeBlocksPerLb, 2))
     setUnit(d.unit)
-    setVesselDiameterIn(String(d.vesselDiameterIn))
+    setVesselDiameterIn(edit(d.vesselDiameterIn, 2))
     setVesselPresetId('custom')
     setRecipeName('')
     setRecipeNotes('')
     setActiveRecipeId(null)
-    onToast?.('Candle calculator reset')
+    onToast?.(t('toast.candleReset'), 'ok')
   }
 
   function handleSave() {
     const recipe = persistSave({
-      name: recipeName.trim() || `${selectedWax?.name || 'Candle'} ×${vesselCount}`,
+      name: recipeName.trim(),
       waxId,
-      vesselCount: parseInt(vesselCount, 10) || 1,
-      waxPerVessel: parseFloat(waxPerVessel) || 0,
+      vesselCount: countOf(vesselCount, intlLocale),
+      waxPerVessel: num(waxPerVessel) || 0,
       useTotalWax,
-      totalWax: parseFloat(totalWax) || 0,
-      fragrancePct: parseFloat(fragrancePct) || 0,
-      dyeBlocksPerLb: parseFloat(dyeBlocksPerLb) || 0,
+      totalWax: num(totalWax) || 0,
+      fragrancePct: num(fragrancePct) || 0,
+      dyeBlocksPerLb: num(dyeBlocksPerLb) || 0,
       unit,
-      vesselDiameterIn: parseFloat(vesselDiameterIn) || 0,
+      vesselDiameterIn: num(vesselDiameterIn) || 0,
       vesselPresetId,
       notes: recipeNotes.trim() || undefined,
     })
@@ -156,20 +191,20 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
 
   function loadRecipe(r: SavedCandleRecipe) {
     setWaxId(r.waxId)
-    setVesselCount(String(r.vesselCount))
-    setWaxPerVessel(String(r.waxPerVessel))
+    setVesselCount(edit(r.vesselCount, 0))
+    setWaxPerVessel(edit(r.waxPerVessel, 4))
     setUseTotalWax(r.useTotalWax)
-    setTotalWax(String(r.totalWax))
-    setFragrancePct(String(r.fragrancePct))
-    setDyeBlocksPerLb(String(r.dyeBlocksPerLb))
+    setTotalWax(edit(r.totalWax, 4))
+    setFragrancePct(edit(r.fragrancePct, 4))
+    setDyeBlocksPerLb(edit(r.dyeBlocksPerLb, 4))
     setUnit(r.unit)
-    setVesselDiameterIn(String(r.vesselDiameterIn))
+    setVesselDiameterIn(edit(r.vesselDiameterIn, 4))
     setVesselPresetId(r.vesselPresetId || 'custom')
     setRecipeName(r.name)
     setRecipeNotes(r.notes || '')
     setActiveRecipeId(r.id)
     setShowSaved(false)
-    onToast?.(`Loaded “${r.name}”`)
+    onToast?.(t('toast.loaded', { name: r.name }), 'ok')
   }
 
   function handleDelete(id: string) {
@@ -177,25 +212,32 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
   }
 
   const currentCandleRecipe = useCallback((): SavedCandleRecipe => {
+    const trimmed = recipeName.trim()
+    const generated = t('recipe.candleTimes', {
+      name: selectedWax
+        ? waxDisplayName(t, selectedWax.id, selectedWax.name)
+        : t('recipe.candleWord'),
+      count: String(countOf(vesselCount, intlLocale)),
+    })
     return currentCandleSnapshot({
       id: activeRecipeId || undefined,
-      name: recipeName.trim() || `${selectedWax?.name || 'Candle'} ×${vesselCount}`,
+      name: trimmed || generated,
       waxId,
-      vesselCount: parseInt(vesselCount, 10) || 1,
-      waxPerVessel: parseFloat(waxPerVessel) || 0,
+      vesselCount: countOf(vesselCount, intlLocale),
+      waxPerVessel: num(waxPerVessel) || 0,
       useTotalWax,
-      totalWax: parseFloat(totalWax) || 0,
-      fragrancePct: parseFloat(fragrancePct) || 0,
-      dyeBlocksPerLb: parseFloat(dyeBlocksPerLb) || 0,
+      totalWax: num(totalWax) || 0,
+      fragrancePct: num(fragrancePct) || 0,
+      dyeBlocksPerLb: num(dyeBlocksPerLb) || 0,
       unit,
-      vesselDiameterIn: parseFloat(vesselDiameterIn) || 0,
+      vesselDiameterIn: num(vesselDiameterIn) || 0,
       vesselPresetId,
       notes: recipeNotes.trim() || undefined,
     })
   }, [
     activeRecipeId,
     recipeName,
-    selectedWax?.name,
+    selectedWax,
     vesselCount,
     waxId,
     waxPerVessel,
@@ -207,31 +249,49 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
     vesselDiameterIn,
     vesselPresetId,
     recipeNotes,
+    t,
+    intlLocale,
   ])
 
   const formatRecipeText = useCallback(() => {
+    const unitLabel = t(`unit.${unit}`)
+    const diameter = num(vesselDiameterIn)
+    const d = Number.isFinite(diameter) ? diameter : 0
+    const wick =
+      result.totalWax <= 0
+        ? t('warn.needWaxForWick')
+        : formatWickHint(d, selectedWax, t, intlLocale)
+    const pour = result.totalWax > 0 ? formatPourHint(selectedWax, t, intlLocale) : ''
     const lines = [
-      `Alex's Craft Calc — Candle`,
-      recipeName ? `Name: ${recipeName}` : null,
-      `Wax: ${selectedWax?.name || waxId}`,
-      `Vessels: ${vesselCount}`,
+      t('copy.candleTitle'),
+      recipeName ? t('copy.candleName', { name: recipeName }) : null,
+      t('copy.wax', { name: waxDisplayName(t, waxId, selectedWax?.name || waxId) }),
+      t('copy.vessels', { count: show(countOf(vesselCount, intlLocale), 0) }),
       useTotalWax
-        ? `Total wax: ${result.totalWax} ${unit}`
-        : `Wax / vessel: ${result.perVessel.wax} ${unit}`,
-      `FO load: ${fragrancePct}% → ${result.fragrance} ${unit} total`,
-      `FO / vessel: ${result.perVessel.fragrance} ${unit}`,
-      `Batch total: ${result.totalBatch} ${unit}`,
-      `Dye blocks est.: ${result.dyeBlocks}`,
-      `Diameter: ${vesselDiameterIn}"`,
-      `Wick: ${result.wickHint}`,
-      result.pourHint ? `Pour: ${result.pourHint}` : null,
-      result.warnings.length ? `Warnings: ${result.warnings.join(' | ')}` : null,
-      recipeNotes.trim() ? `Notes:\n${recipeNotes.trim()}` : null,
+        ? t('copy.totalWax', { amount: show(result.totalWax, 2), unit: unitLabel })
+        : t('copy.waxPer', { amount: show(result.perVessel.wax, 2), unit: unitLabel }),
+      t('copy.foLoad', {
+        pct: show(num(fragrancePct) || 0, 2),
+        amount: show(result.fragrance, 2),
+        unit: unitLabel,
+      }),
+      t('copy.foPer', { amount: show(result.perVessel.fragrance, 2), unit: unitLabel }),
+      t('copy.batch', { amount: show(result.totalBatch, 2), unit: unitLabel }),
+      t('copy.dye', { amount: show(result.dyeBlocks, 2) }),
+      t('copy.diameter', { d: show(d, 2) }),
+      t('copy.wick', { hint: wick }),
+      pour ? t('copy.pour', { hint: pour }) : null,
+      result.warnings.length
+        ? t('copy.warnings', {
+            text: result.warnings.map((w) => localizeRuntimeMessage(w, t, intlLocale)).join(' | '),
+          })
+        : null,
+      recipeNotes.trim() ? t('copy.notes', { notes: recipeNotes.trim() }) : null,
     ].filter(Boolean)
     return lines.join('\n')
   }, [
     recipeName,
-    selectedWax?.name,
+    selectedWax,
     waxId,
     vesselCount,
     useTotalWax,
@@ -240,34 +300,39 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
     fragrancePct,
     vesselDiameterIn,
     recipeNotes,
+    t,
+    intlLocale,
   ])
 
   async function handleCopy() {
     const ok = await copyText(formatRecipeText())
-    onToast?.(ok ? 'Results copied' : 'Copy failed')
+    onToast?.(ok ? t('toast.resultsCopied') : t('toast.copyFailed'), ok ? 'ok' : 'err')
   }
 
   function handlePrint() {
     const w = window.open('', '_blank', 'noopener,noreferrer,width=720,height=900')
     if (!w) {
-      onToast?.('Pop-up blocked — allow pop-ups to print')
+      onToast?.(t('toast.popup'), 'err')
       return
     }
     const html =
-      '<!doctype html><html><head><title>Candle Recipe</title>' +
-      '<style>' +
-      'body{font-family:Segoe UI,system-ui,sans-serif;padding:2rem;color:#1a0a2e;line-height:1.5}' +
+      '<!doctype html><html><head><title>' +
+      escapeHtml(t('print.candleTitle')) +
+      '</title><style>' +
+      'body{font-family:' +
+      t('print.font') +
+      ';padding:2rem;color:#1a0a2e;line-height:1.5}' +
       'h1{color:#6b21a8;font-size:1.4rem}' +
       'pre{white-space:pre-wrap;background:#f5e9ff;padding:1rem;border-radius:12px}' +
       '.note{font-size:0.85rem;color:#666;margin-top:1.5rem}' +
       '</style></head><body>' +
-      "<h1>Alex's Craft Calc — Candle</h1>" +
-      '<pre>' +
+      '<h1>' +
+      escapeHtml(t('print.candleH1')) +
+      '</h1><pre>' +
       escapeHtml(formatRecipeText()) +
-      '</pre>' +
-      '<p class="note">Craft planning only. Verify FO limits and wick with test burns.</p>' +
-      '<script>onload=()=>{print();}</script>' +
-      '</body></html>'
+      '</pre><p class="note">' +
+      escapeHtml(t('print.candleNote')) +
+      '</p><script>onload=()=>{print();}</script></body></html>'
     w.document.write(html)
     w.document.close()
   }
@@ -276,9 +341,9 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
   async function handleLoadFile(file: File | null) {
     if (!file) return
     try {
-      const result = await loadFromFile(file)
-      if (!result) return
-      const { parsed, merged, summary } = result
+      const loaded = await loadFromFile(file)
+      if (!loaded) return
+      const { parsed, merged } = loaded
       if (
         merged.lastCandle &&
         parsed.kind === 'candle' &&
@@ -287,7 +352,10 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
       ) {
         loadRecipe(merged.lastCandle)
       }
-      onToast?.(summary)
+      onToast?.(
+        localizeImportSummary(merged, t, intlLocale),
+        importHasChanges(merged) ? 'ok' : 'warn',
+      )
     } finally {
       if (importRef.current) importRef.current.value = ''
     }
@@ -304,41 +372,54 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
   }
 
   function setFoTypical() {
-    if (selectedWax) setFragrancePct(String(selectedWax.fragranceTypical))
+    if (selectedWax) setFragrancePct(edit(selectedWax.fragranceTypical, 2))
   }
 
   function setFoMin() {
-    if (selectedWax) setFragrancePct(String(selectedWax.fragranceMin))
+    if (selectedWax) setFragrancePct(edit(selectedWax.fragranceMin, 2))
   }
 
   function setFoMax() {
-    if (selectedWax) setFragrancePct(String(selectedWax.fragranceMax))
+    if (selectedWax) setFragrancePct(edit(selectedWax.fragranceMax, 2))
   }
 
-  const u = unit
+  const shownWax = selectedWax ? localizeWax(t, selectedWax) : null
+  const foPct = num(fragrancePct)
   const foInRange =
-    selectedWax &&
-    parseFloat(fragrancePct) >= selectedWax.fragranceMin &&
-    parseFloat(fragrancePct) <= selectedWax.fragranceMax
+    !!selectedWax &&
+    Number.isFinite(foPct) &&
+    foPct >= selectedWax.fragranceMin &&
+    foPct <= selectedWax.fragranceMax
+  const diameterIn = num(vesselDiameterIn)
+  const diameterCm =
+    Number.isFinite(diameterIn) && diameterIn > 0
+      ? t('candle.diameterCm', { cm: show(diameterIn * 2.54, 1) })
+      : ''
+  const unitLabel = t(`unit.${unit}`)
+  const wickHintText =
+    result.totalWax <= 0
+      ? t('warn.needWaxForWick')
+      : formatWickHint(Number.isFinite(diameterIn) ? diameterIn : 0, selectedWax, t, intlLocale)
+  const pourHintText = result.totalWax > 0 ? formatPourHint(selectedWax, t, intlLocale) : ''
 
   return (
     <div className="calc-panel candle-panel">
       <header className="panel-head">
         <div>
-          <h2>Candle Calculator</h2>
-          <p className="muted">Wax, fragrance load, dye guide & wick hints — live.</p>
+          <h2>{t('candle.title')}</h2>
+          <p className="muted">{t('candle.subtitle')}</p>
         </div>
         <div className="head-actions">
           <label className="seg">
-            <span className="sr-only">Unit</span>
+            <span className="sr-only">{t('unit.candleAria')}</span>
             <select value={unit} onChange={(e) => onUnitChange(e.target.value as WeightUnit)}>
-              <option value="g">grams</option>
-              <option value="oz">ounces</option>
-              <option value="lb">pounds</option>
+              <option value="g">{t('unit.grams')}</option>
+              <option value="oz">{t('unit.ounces')}</option>
+              <option value="lb">{t('unit.pounds')}</option>
             </select>
           </label>
           <button type="button" className="ghost" onClick={resetDefaults}>
-            Reset
+            {t('common.reset')}
           </button>
         </div>
       </header>
@@ -346,10 +427,10 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
       <section className="card recipe-bar">
         <div className="recipe-bar-row">
           <label className="recipe-name-field">
-            Recipe name
+            {t('common.recipeName')}
             <input
               type="text"
-              placeholder="e.g. Lavender 8oz soy run"
+              placeholder={t('candle.placeholder')}
               value={recipeName}
               onChange={(e) => setRecipeName(e.target.value)}
               maxLength={120}
@@ -357,18 +438,18 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
           </label>
           <div className="recipe-actions">
             <button type="button" className="chip solid" onClick={handleSave}>
-              {activeRecipeId ? 'Update' : 'Save'}
+              {activeRecipeId ? t('common.update') : t('common.save')}
             </button>
             <button type="button" className="chip" onClick={() => setShowSaved((v) => !v)}>
-              {showSaved ? 'Hide saved' : `Saved (${saved.length})`}
+              {showSaved ? t('common.hideSaved') : t('common.savedCount', { n: show(saved.length, 0) })}
             </button>
             <button
               type="button"
               className="chip"
               onClick={() => importRef.current?.click()}
-              title="Load a recipe or library backup file into Saved"
+              title={t('common.loadTitle')}
             >
-              Load
+              {t('common.load')}
             </button>
             <button
               type="button"
@@ -378,15 +459,15 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
                 e.preventDefault()
                 void handleShareLibrary()
               }}
-              title="Share recipe (phone share sheet or download). Right-click / long-press: share full library"
+              title={t('common.shareTitle')}
             >
-              Share
+              {t('common.share')}
             </button>
-            <button type="button" className="chip" onClick={handleCopy} title="Copy batch text">
-              Copy
+            <button type="button" className="chip" onClick={handleCopy} title={t('common.copyBatchTitle')}>
+              {t('common.copy')}
             </button>
             <button type="button" className="chip" onClick={handlePrint}>
-              Print
+              {t('common.print')}
             </button>
           </div>
           <input
@@ -394,64 +475,67 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
             type="file"
             accept={RECIPE_FILE_ACCEPT}
             className="sr-only"
-            aria-label="Load recipe or library file"
+            aria-label={t('common.loadFileAria')}
             onChange={(e) => void handleLoadFile(e.target.files?.[0] ?? null)}
           />
         </div>
         <label className="notes-field">
-          Custom recipe notes
+          {t('common.customNotes')}
           <textarea
             rows={3}
             maxLength={4000}
-            placeholder="Batch notes, FO blend, dye, wick size, cure log, customer order…"
+            placeholder={t('candle.notesPlaceholder')}
             value={recipeNotes}
             onChange={(e) => setRecipeNotes(e.target.value)}
           />
         </label>
-        {activeRecipeId && (
-          <p className="hint recipe-slot-hint">
-            Editing saved recipe — Save updates this library slot (or rename to keep both).
-          </p>
-        )}
+        {activeRecipeId && <p className="hint recipe-slot-hint">{t('common.editingSlot')}</p>}
         {showSaved && (
           <div className="saved-list">
-            {saved.length === 0 && <p className="hint">No saved candle recipes yet.</p>}
+            {saved.length === 0 && <p className="hint">{t('candle.noSaved')}</p>}
             {saved.length > 0 && (
               <div className="saved-list-actions">
                 <button
                   type="button"
                   className="chip"
                   onClick={() => void handleShareLibrary()}
-                  title="Share or download every saved soap + candle recipe"
+                  title={t('common.shareLibraryTitle')}
                 >
-                  Share library
+                  {t('common.shareLibrary')}
                 </button>
               </div>
             )}
-            {saved.map((r) => (
-              <div
-                key={r.id}
-                className={'saved-item' + (r.id === activeRecipeId ? ' active' : '')}
-                aria-current={r.id === activeRecipeId ? 'true' : undefined}
-              >
-                <button type="button" className="saved-load" onClick={() => loadRecipe(r)}>
-                  <strong>{r.name}</strong>
-                  <span>
-                    {getWax(r.waxId)?.name || r.waxId} · {r.vesselCount} vessels · {r.fragrancePct}% FO
-                    {formatSavedAt(r.savedAt) ? ` · ${formatSavedAt(r.savedAt)}` : ''}
-                  </span>
-                  {r.notes ? <span className="notes-chip">notes</span> : null}
-                </button>
-                <button
-                  type="button"
-                  className="icon-btn"
-                  aria-label={`Delete ${r.name}`}
-                  onClick={() => handleDelete(r.id)}
+            {saved.map((r) => {
+              const when = formatSavedAt(r.savedAt, intlLocale)
+              return (
+                <div
+                  key={r.id}
+                  className={'saved-item' + (r.id === activeRecipeId ? ' active' : '')}
+                  aria-current={r.id === activeRecipeId ? 'true' : undefined}
                 >
-                  ×
-                </button>
-              </div>
-            ))}
+                  <button type="button" className="saved-load" onClick={() => loadRecipe(r)}>
+                    <strong>{r.name}</strong>
+                    <span>
+                      {t('candle.savedMeta', {
+                        wax: waxDisplayName(t, r.waxId, getWax(r.waxId)?.name || r.waxId),
+                        count: show(r.vesselCount, 0),
+                        fo: show(r.fragrancePct, 2),
+                      })}
+                      {when ? `${t('candle.metaSep')}${when}` : ''}
+                    </span>
+                    {r.notes ? <span className="notes-chip">{t('common.notes')}</span> : null}
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    aria-label={t('common.deleteAria', { name: r.name })}
+                    onClick={() => handleDelete(r.id)}
+                  >
+                    ×
+                  </button>
+                </div>
+              )
+            })}
           </div>
         )}
       </section>
@@ -459,44 +543,53 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
       <div className="grid-2">
         <section className="card">
           <div className="card-title-row">
-            <h3>Wax & vessels</h3>
+            <h3>{t('candle.waxVessels')}</h3>
             {selectedWax && (
               <button
                 type="button"
                 className="chip"
                 onClick={() => onOpenWiki?.(waxWikiId(waxId))}
-                title="Open wax in wiki"
+                title={t('candle.wikiTitle')}
               >
-                Wiki
+                {t('common.wiki')}
               </button>
             )}
           </div>
           <div className="field-grid">
             <label className="full">
-              Wax type
+              {t('candle.waxType')}
               <select value={waxId} onChange={(e) => onWaxChange(e.target.value)}>
                 {WAXES.map((w) => (
                   <option key={w.id} value={w.id}>
-                    {w.name}
+                    {waxDisplayName(t, w.id, w.name)}
                   </option>
                 ))}
               </select>
             </label>
-            {selectedWax && (
+            {shownWax && (
               <div className="hint full wax-meta">
                 <p>
-                  FO load {selectedWax.fragranceMin}–{selectedWax.fragranceMax}% · typical{' '}
-                  {selectedWax.fragranceTypical}%
-                  {selectedWax.meltPointF ? ` · melt ~${selectedWax.meltPointF}°F` : ''}
-                  {selectedWax.pourTempF ? ` · pour ~${selectedWax.pourTempF}°F` : ''}
+                  {t(`waxType.${shownWax.type}`)}
+                  {t('candle.metaSep')}
+                  {t('candle.foLoadMeta', {
+                    min: show(shownWax.fragranceMin, 2),
+                    max: show(shownWax.fragranceMax, 2),
+                    typical: show(shownWax.fragranceTypical, 2),
+                  })}
+                  {shownWax.meltPointF
+                    ? `${t('candle.metaSep')}${t('candle.meltBit', { temp: formatTempF(shownWax.meltPointF, intlLocale) })}`
+                    : ''}
+                  {shownWax.pourTempF
+                    ? `${t('candle.metaSep')}${t('candle.pourBit', { temp: formatTempF(shownWax.pourTempF, intlLocale) })}`
+                    : ''}
                 </p>
-                {selectedWax.notes && <p>{selectedWax.notes}</p>}
-                {selectedWax.cureDays && <p>Cure: {selectedWax.cureDays}</p>}
-                {selectedWax.bestFor && (
+                {shownWax.notes && <p>{shownWax.notes}</p>}
+                {shownWax.cureDays && <p>{t('candle.cure', { text: shownWax.cureDays })}</p>}
+                {shownWax.bestFor && (
                   <p className="tag-row">
-                    {selectedWax.bestFor.map((t) => (
-                      <span key={t} className="mini-tag">
-                        {t}
+                    {shownWax.bestFor.map((tag) => (
+                      <span key={tag} className="mini-tag">
+                        {displayTag(t, tag)}
                       </span>
                     ))}
                   </p>
@@ -504,23 +597,22 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
               </div>
             )}
             <label className="full">
-              Vessel preset
-              <select
-                value={vesselPresetId}
-                onChange={(e) => applyVesselPreset(e.target.value)}
-              >
+              {t('candle.vesselPreset')}
+              <select value={vesselPresetId} onChange={(e) => applyVesselPreset(e.target.value)}>
                 {VESSEL_PRESETS.map((v) => (
                   <option key={v.id} value={v.id}>
-                    {v.label}
-                    {v.fillOz > 0 ? ` (~${v.fillOz} oz wax)` : ''}
+                    {vesselLabel(t, v.id, v.label)}
+                    {v.fillOz > 0 ? t('vessel.ozSuffix', { oz: show(v.fillOz, 2) }) : ''}
                   </option>
                 ))}
               </select>
             </label>
             <label>
-              Number of vessels
+              {t('candle.vesselCount')}
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
                 min="1"
                 step="1"
                 value={vesselCount}
@@ -528,9 +620,12 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
               />
             </label>
             <label>
-              Vessel diameter (in)
+              {t('candle.diameter')}
+              {diameterCm ? <span className="hint">{diameterCm}</span> : null}
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
                 min="0"
                 step="0.25"
                 value={vesselDiameterIn}
@@ -543,13 +638,15 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
                 checked={useTotalWax}
                 onChange={(e) => setUseTotalWax(e.target.checked)}
               />
-              Enter total wax instead of per vessel
+              {t('candle.enterTotal')}
             </label>
             {useTotalWax ? (
               <label className="full">
-                Total wax ({u})
+                {t('candle.totalWax', { unit: unitLabel })}
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
                   min="0"
                   step="any"
                   value={totalWax}
@@ -561,9 +658,11 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
               </label>
             ) : (
               <label className="full">
-                Wax per vessel ({u})
+                {t('candle.waxPer', { unit: unitLabel })}
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
                   min="0"
                   step="any"
                   value={waxPerVessel}
@@ -578,12 +677,14 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
         </section>
 
         <section className="card">
-          <h3>Fragrance & dye</h3>
+          <h3>{t('candle.fragranceDye')}</h3>
           <div className="field-grid">
             <label>
-              Fragrance load %
+              {t('candle.fragranceLoad')}
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
                 min="0"
                 max="20"
                 step="0.1"
@@ -592,9 +693,11 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
               />
             </label>
             <label>
-              Dye blocks per lb wax
+              {t('candle.dyePerLb')}
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
                 min="0"
                 max="10"
                 step="0.25"
@@ -604,109 +707,103 @@ export function CandleCalculator({ onOpenWiki, onToast }: CandleCalculatorProps)
             </label>
             <div className="full fo-quick">
               <button type="button" className="chip" onClick={setFoMin} disabled={!selectedWax}>
-                Min FO
+                {t('candle.minFo')}
               </button>
               <button type="button" className="chip" onClick={setFoTypical} disabled={!selectedWax}>
-                Typical
+                {t('candle.typical')}
               </button>
               <button type="button" className="chip" onClick={setFoMax} disabled={!selectedWax}>
-                Max FO
+                {t('candle.maxFo')}
               </button>
               {selectedWax && (
                 <span className={`fo-range-pill ${foInRange ? 'ok' : 'warn'}`}>
-                  {foInRange ? 'In range' : 'Outside typical band'}
+                  {foInRange ? t('candle.foInRange') : t('candle.foOut')}
                 </span>
               )}
             </div>
-            <p className="hint full">
-              Dye is a rough guide only — pigments vary wildly. Start light and test burn. FO % is of
-              wax weight (not total batch).
-            </p>
+            <p className="hint full">{t('candle.dyeHint')}</p>
           </div>
         </section>
       </div>
 
       <section className="card results-card">
         <div className="card-title-row">
-          <h3>Batch results</h3>
+          <h3>{t('candle.batchResults')}</h3>
           <div className="result-actions">
             <button type="button" className="chip" onClick={handleCopy}>
-              Copy
+              {t('common.copy')}
             </button>
             <button type="button" className="chip" onClick={handlePrint}>
-              Print
+              {t('common.print')}
             </button>
           </div>
         </div>
         {result.warnings.length > 0 && (
           <ul className="warnings">
             {result.warnings.map((w) => (
-              <li key={w}>{w}</li>
+              <li key={w}>{localizeRuntimeMessage(w, t, intlLocale)}</li>
             ))}
           </ul>
         )}
         <div className="stat-grid">
           <div className="stat hero">
-            <span className="stat-label">Fragrance oil</span>
+            <span className="stat-label">{t('candle.fragranceOil')}</span>
             <span className="stat-value">
-              {result.fragrance} <small>{u}</small>
+              {show(result.fragrance, 2)} <small>{unitLabel}</small>
             </span>
           </div>
           <div className="stat">
-            <span className="stat-label">Total wax</span>
+            <span className="stat-label">{t('candle.totalWaxStat')}</span>
             <span className="stat-value">
-              {result.totalWax} <small>{u}</small>
+              {show(result.totalWax, 2)} <small>{unitLabel}</small>
             </span>
           </div>
           <div className="stat">
-            <span className="stat-label">Batch total</span>
+            <span className="stat-label">{t('candle.batchTotal')}</span>
             <span className="stat-value">
-              {result.totalBatch} <small>{u}</small>
+              {show(result.totalBatch, 2)} <small>{unitLabel}</small>
             </span>
           </div>
           <div className="stat">
-            <span className="stat-label">Dye blocks (est.)</span>
-            <span className="stat-value">{result.dyeBlocks}</span>
+            <span className="stat-label">{t('candle.dyeBlocks')}</span>
+            <span className="stat-value">{show(result.dyeBlocks, 2)}</span>
           </div>
           <div className="stat">
-            <span className="stat-label">Wax / vessel</span>
+            <span className="stat-label">{t('candle.waxPerStat')}</span>
             <span className="stat-value">
-              {result.perVessel.wax} <small>{u}</small>
+              {show(result.perVessel.wax, 2)} <small>{unitLabel}</small>
             </span>
           </div>
           <div className="stat">
-            <span className="stat-label">FO / vessel</span>
+            <span className="stat-label">{t('candle.foPerStat')}</span>
             <span className="stat-value">
-              {result.perVessel.fragrance} <small>{u}</small>
+              {show(result.perVessel.fragrance, 2)} <small>{unitLabel}</small>
             </span>
           </div>
         </div>
 
         <div className="hint-blocks">
           <div className="hint-block">
-            <h4>Wick guidance</h4>
-            <p>{result.wickHint}</p>
+            <h4>{t('candle.wickGuidance')}</h4>
+            <p>{wickHintText}</p>
           </div>
-          {result.pourHint && (
+          {pourHintText && (
             <div className="hint-block">
-              <h4>Pour notes</h4>
-              <p>{result.pourHint}</p>
+              <h4>{t('candle.pourNotes')}</h4>
+              <p>{pourHintText}</p>
             </div>
           )}
         </div>
 
-        {selectedWax?.wickNotes && (
+        {shownWax?.wickNotes && (
           <p className="meta-row" style={{ marginTop: '0.75rem' }}>
             <span>
-              Wick note: <strong>{selectedWax.wickNotes}</strong>
+              {t('candle.wickNote')} <strong>{shownWax.wickNotes}</strong>
             </span>
           </p>
         )}
 
-        <p className="disclaimer">
-          Always test-burn. Fragrance load limits depend on your FO flash point and wax brand. Follow
-          FO supplier max usage rates. This calculator is for craft planning only.
-        </p>
+        <p className="disclaimer">{t('candle.disclaimer')}</p>
       </section>
     </div>
   )
