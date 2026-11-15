@@ -1173,6 +1173,89 @@ html[lang='zh-CN'] .wiki-section h4 {
   font-size: 0.9rem;
 }
 
+/* ── About ─────────────────────────────────────────────── */
+.about-root {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: max(0.75rem, env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-right))
+    max(0.75rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left));
+}
+
+.about-backdrop {
+  position: absolute;
+  inset: 0;
+  border: none;
+  background: rgba(4, 2, 12, 0.72);
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+}
+
+.about-panel {
+  position: relative;
+  z-index: 1;
+  width: min(420px, 100%);
+  padding: 1.25rem 1.35rem 1.1rem;
+  background: linear-gradient(165deg, rgba(28, 12, 52, 0.97), rgba(12, 6, 24, 0.98));
+  border: 1px solid var(--border-strong);
+  border-radius: 20px;
+  box-shadow: 0 30px 80px rgba(40, 0, 90, 0.55);
+}
+
+.about-panel h2 {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--alien-hot);
+}
+
+html[lang='ja'] .about-panel h2,
+html[lang='ko'] .about-panel h2,
+html[lang='zh-CN'] .about-panel h2 {
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 0.95rem;
+}
+
+.about-name {
+  margin: 0.35rem 0 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.about-version {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.about-source-row {
+  margin: 0.85rem 0 0;
+}
+
+.about-source-row a {
+  color: var(--alien-hot);
+  font-weight: 700;
+  text-underline-offset: 2px;
+}
+
+.about-signoff {
+  margin: 1rem 0 0;
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.about-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1.15rem;
+}
+
 /* Print-friendly batch sheet */
 @media print {
   .bg-orb,
@@ -1183,6 +1266,7 @@ html[lang='zh-CN'] .wiki-section h4 {
   .lang-select,
   .fab-help,
   .toast,
+  .about-root,
   .wiki-root,
   .toolbar-card,
   .head-actions,
