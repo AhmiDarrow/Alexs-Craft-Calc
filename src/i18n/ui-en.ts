@@ -2,6 +2,12 @@ import type { Catalog } from './translate'
 
 /** English UI copy. Content catalogs (oils, waxes, wiki bodies) are added by buildCatalog. */
 export const UI_EN: Catalog = {
+  'about.close': 'Close',
+  'about.open': 'About',
+  'about.signoff': '"Hope this helps" - Ahmi',
+  'about.source': 'Source code',
+  'about.title': 'About',
+  'about.version': 'Version',
   'app.tagline': 'Soap · Candle · Precision in purple',
   'app.documentTitle': "Alex's Craft Calc — Soap & Candle",
   'app.description': "Alex's Craft Calc — power soap lye & candle wax calculator. Alien Purple.",
