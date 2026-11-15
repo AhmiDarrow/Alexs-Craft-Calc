@@ -4,6 +4,16 @@ All notable changes to **Alex's Craft Calc** are documented here.
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-11-15
+
+### Added
+- Now available in Spanish, French, German, Portuguese (Brazil), Italian, Russian, Polish, Japanese, Korean and Chinese (Simplified). Apps use your system language by default; change it any time in Settings → Language.
+
+### Changed
+- Android `versionName` / `versionCode` → **1.1.0** / `11`
+
+"Hope this helps" - Ahmi
+
 ## [1.0.10] — 2026-09-08
 
 ### Added
