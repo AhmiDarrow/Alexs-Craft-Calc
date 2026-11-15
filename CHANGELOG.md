@@ -4,6 +4,14 @@ All notable changes to **Alex's Craft Calc** are documented here.
 
 ## [Unreleased]
 
+## [1.1.1] — 2026-11-15
+
+### Added
+- Added an About section with version info.
+
+### Changed
+- Android `versionName` / `versionCode` → **1.1.1** / `12`
+
 ## [1.1.0] — 2026-11-15
 
 ### Added
