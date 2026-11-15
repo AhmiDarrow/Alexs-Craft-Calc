@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { AboutDialog } from './components/AboutDialog'
 import { LanguageSelect } from './components/LanguageSelect'
 import { ModeToggle } from './components/ModeToggle'
 import { SoapCalculator } from './components/SoapCalculator'
@@ -37,6 +38,7 @@ export default function App() {
   const [wikiOpen, setWikiOpen] = useState(false)
   const [wikiId, setWikiId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ text: string; tone?: ToastTone } | null>(null)
+  const [aboutOpen, setAboutOpen] = useState(false)
 
   useEffect(() => {
     writeMode(mode)
@@ -136,6 +138,16 @@ export default function App() {
             <span className="help-key">F1</span>
             <span>{t('header.wiki')}</span>
           </button>
+          <button
+            type="button"
+            className="help-btn about-btn"
+            onClick={() => setAboutOpen(true)}
+            aria-haspopup="dialog"
+            aria-expanded={aboutOpen}
+            aria-controls="about-dialog"
+          >
+            {t('about.open')}
+          </button>
           <LanguageSelect />
           <ModeToggle mode={mode} onChange={setMode} />
         </div>
@@ -170,6 +182,7 @@ export default function App() {
         <p className="disclaimer">{t('footer.disclaimer')}</p>
       </footer>
 
+      <AboutDialog open={aboutOpen} onClose={() => setAboutOpen(false)} />
       <Wiki open={wikiOpen} onClose={closeWiki} initialId={wikiId} />
       <Toast message={toast?.text ?? null} tone={toast?.tone} onDone={() => setToast(null)} />
 

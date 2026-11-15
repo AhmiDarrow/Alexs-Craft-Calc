@@ -194,3 +194,5 @@ GitHub Releases: [v1.1.0](https://github.com/AhmiDarrow/Alexs-Craft-Calc/release
 <p align="center">
   <sub>Built for Ahmi · Alex's Craft Calc <strong>v1.1.0</strong> · local-first craft math</sub>
 </p>
+
+"Hope this helps" - Ahmi
