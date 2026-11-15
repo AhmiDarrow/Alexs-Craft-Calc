@@ -1,11 +1,14 @@
+import { useI18n } from '../i18n/I18nProvider'
+
 interface ModeToggleProps {
   mode: 'soap' | 'candle'
   onChange: (mode: 'soap' | 'candle') => void
 }
 
 export function ModeToggle({ mode, onChange }: ModeToggleProps) {
+  const { t } = useI18n()
   return (
-    <div className="mode-toggle" role="tablist" aria-label="Calculator mode">
+    <div className="mode-toggle" role="tablist" aria-label={t('mode.aria')}>
       <button
         type="button"
         role="tab"
@@ -19,7 +22,7 @@ export function ModeToggle({ mode, onChange }: ModeToggleProps) {
         <span className="mode-icon" aria-hidden>
           ✦
         </span>
-        Soap
+        {t('mode.soap')}
       </button>
       <button
         type="button"
@@ -34,7 +37,7 @@ export function ModeToggle({ mode, onChange }: ModeToggleProps) {
         <span className="mode-icon" aria-hidden>
           ✧
         </span>
-        Candle
+        {t('mode.candle')}
       </button>
       <div
         className="mode-slider"
