@@ -1,0 +1,67 @@
+{
+ "qualities": [
+  {
+   "key": "hardness",
+   "label": "Hardness",
+   "min": 29,
+   "max": 54,
+   "hint": "Lauric + myristic + palmitic + stearic — coconut, palm, tallow, lard, cocoa & stearic butters. Below ~29 the bar stays soft; above ~54 it can get brittle and hard to cut."
+  },
+  {
+   "key": "cleansing",
+   "label": "Cleansing",
+   "min": 12,
+   "max": 22,
+   "hint": "Lauric + myristic (coconut family). Above ~22 can strip skin; below ~12 may feel under-cleaning."
+  },
+  {
+   "key": "conditioning",
+   "label": "Conditioning",
+   "min": 44,
+   "max": 69,
+   "hint": "Oleic + linoleic + linolenic + ricinoleic + palmitoleic — olive, avocado, macadamia, castor, soft oils. Above ~69 the bar softens and cures slower."
+  },
+  {
+   "key": "bubbly",
+   "label": "Bubbly lather",
+   "min": 14,
+   "max": 46,
+   "hint": "Big fluffy bubbles come from lauric/myristic oils — coconut, palm kernel, babassu. Too high with low superfat = drying."
+  },
+  {
+   "key": "creamy",
+   "label": "Creamy lather",
+   "min": 16,
+   "max": 48,
+   "hint": "Palmitic + stearic + ricinoleic — palm, tallow, lard, butters, castor give dense, creamy suds."
+  },
+  {
+   "key": "longevity",
+   "label": "Longevity",
+   "min": 18,
+   "max": 47,
+   "hint": "Palmitic + stearic — palm, tallow, lard, cocoa/stearic butters. Low means the bar dissolves fast; high means a long-lasting, slow-wearing bar."
+  },
+  {
+   "key": "mildness",
+   "label": "Mildness",
+   "min": 40,
+   "max": 70,
+   "hint": "Oleic + linoleic + linolenic + ricinoleic + palmitoleic — olive, avocado, macadamia, soft oils, castor. Low can feel harsh; very high is gentle but softens the bar."
+  },
+  {
+   "key": "iodine",
+   "label": "Iodine value",
+   "min": 41,
+   "max": 70,
+   "hint": "Unsaturation → shelf life. Low = stable & hard; high = soft, faster rancidity (DOS). Keep high-iodine oils moderate and cure well."
+  },
+  {
+   "key": "ins",
+   "label": "INS",
+   "min": 136,
+   "max": 165,
+   "hint": "Iodine × SAP combo — hardness & stability proxy. Below ~136 soft; above ~165 can be drying."
+  }
+ ]
+}
