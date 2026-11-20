@@ -28,6 +28,7 @@ inputs (`remedyui/tests/parity.rs`, fixture from `remedyui/tools/gen-parity.ts`)
 - [x] Print: the same print sheet; in a browser it prints through the print dialog, elsewhere it is saved as a page to print (RemedyUI has no native printing yet — see report)
 - [x] Total oils ceiling; editing it keeps each oil's % (parity)
 - [x] Scale weights to total; Apply % to weights (parity, toasts)
+- [x] New: Recalculate (by the oils and on the results card) balances the oils against Total oils and unlocks the results
 - [x] Presets: Custom (empty), Castile-ish, Everyday Bar, Creamy Shea, Palm-free, Luxury Butter (parity)
 - [x] Oil rows: oil choice (all oils), wiki info button with the oil's note as tooltip, weight and % both live (parity), over-max % flagged, remove
 - [x] Empty custom state with "+ Add first oil"; "+ Add oil"

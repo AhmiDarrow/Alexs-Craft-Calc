@@ -4,6 +4,17 @@ All notable changes to **Alex's Craft Calc** are documented here.
 
 ## [Unreleased]
 
+## [2.0.0] — 2026-11-19 — RemedyUI edition (`remedyui/`)
+
+### Added
+- **Recalculate** (soap) — one button, by the oils and on the results card, that balances the oils
+  against Total oils so locked results unlock: % that total 100 set the weights, otherwise the
+  weights scale to the ceiling, and with no ceiling the typed weights become Total oils
+- The whole app ported to RemedyUI 1.0 (native Windows, Android, web) — see `PORT-CHECKLIST.md`
+
+### Changed
+- Shorter, plainer hint under Total oils that points at Recalculate
+
 ## [1.0.10] — 2026-09-08
 
 ### Added
