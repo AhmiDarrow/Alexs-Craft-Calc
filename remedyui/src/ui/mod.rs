@@ -87,10 +87,15 @@ impl Ctx {
     pub fn save_file(&self, file_name: String, contents: String) {
         let me = self.clone();
         let mut dialog = FileDialog::default();
-        dialog.title = "Save recipe file".into();
+        let page = file_name.ends_with(".html");
+        dialog.title = if page { "Save print sheet" } else { "Save recipe file" }.into();
         dialog.save = true;
         dialog.file_name = Some(file_name.clone());
-        dialog.filters = vec![("Recipe files".into(), vec!["json".into()])];
+        dialog.filters = if page {
+            vec![("Web pages".into(), vec!["html".into()])]
+        } else {
+            vec![("Recipe files".into(), vec!["json".into()])]
+        };
         self.app.file_dialog(Some(&self.window), dialog, move |paths| {
             let Some(path) = paths.into_iter().next() else { return };
             match write_file(&path, contents.as_bytes()) {
