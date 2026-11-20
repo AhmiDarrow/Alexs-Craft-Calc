@@ -200,3 +200,126 @@ fn recalculate_balances_the_oils_and_unlocks_the_results() {
     );
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// Every text a screen reader reaches on the soap screen, the candle screen and a wiki
+/// article, in `lang`.
+fn texts_in(lang: &str) -> Vec<String> {
+    let dir = temp(&format!("lang-{lang}"));
+    let config = craft_calc::config().data_dir(dir.clone());
+    let start = ui::Start { lang: Some(lang.into()), ..Default::default() };
+    let mut app = TestApp::new(config, move |app| ui::open_at(app, none(), start.clone()));
+    app.frames(3);
+    let mut out = Vec::new();
+    let mut grab = |app: &TestApp| {
+        for n in app.reader_view() {
+            out.extend(n.name);
+            out.extend(n.value);
+        }
+    };
+    grab(&app);
+    app.key(KeyEvent::press(Key::F(1)));
+    app.frames(2);
+    grab(&app);
+    app.key(KeyEvent::press(Key::Escape));
+    app.frames(2);
+    let tabs: Vec<_> = app.reader_view().into_iter().filter(|n| n.role == Role::Tab).collect();
+    let ui = app.ui().unwrap();
+    assert!(ui.accessibility_action(tabs[1].id, remedy_ui::a11y::Action::Click));
+    app.frames(3);
+    grab(&app);
+    drop(app);
+    let _ = std::fs::remove_dir_all(dir);
+    out
+}
+
+#[test]
+fn every_language_reaches_every_screen() {
+    let en: std::collections::BTreeSet<String> = texts_in("en").into_iter().collect();
+    let de: std::collections::BTreeSet<String> = texts_in("de").into_iter().collect();
+    // Some words are German too ("ideal"): what reads the same in French as well is left over.
+    let fr: std::collections::BTreeSet<String> = texts_in("fr").into_iter().collect();
+    // Words that read the same in German, and names that are not translated.
+    let same = [
+        "Alex's Craft Calc",
+        "Wiki",
+        "F1",
+        "?",
+        "INS",
+        "NaOH",
+        "KOH",
+        "g",
+        "oz",
+        "lb",
+        "English",
+        "Esc",
+        "F1 Wiki",
+    ];
+    let left: Vec<&String> = en
+        .intersection(&de)
+        .filter(|s| fr.contains(*s))
+        .filter(|s| s.chars().filter(|c| c.is_ascii_alphabetic()).count() >= 3)
+        .filter(|s| !same.iter().any(|x| s.as_str() == *x))
+        .collect();
+    assert!(
+        left.is_empty(),
+        "{} texts still in English:\n{}",
+        left.len(),
+        left.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("\n")
+    );
+}
+
+#[test]
+fn the_language_changes_in_place_and_keeps_the_recipe() {
+    let dir = temp("switch");
+    let mut app = start_in(&dir, none());
+    set_number(&mut app, "Weight", 0, "500");
+    // Soap ⇄ Candle keeps what was typed.
+    assert!(app.press(Role::Tab, "✧ Candle"));
+    app.frames(2);
+    assert!(app.press(Role::Tab, "✦ Soap"));
+    app.frames(2);
+    assert!(
+        app.reader_view()
+            .iter()
+            .any(|n| n.name.as_deref() == Some("Weight") && n.value.as_deref() == Some("500"))
+    );
+    // Language → Deutsch.
+    assert!(app.press(Role::Button, "Language"));
+    app.frames(2);
+    assert!(app.press(Role::MenuItem, "Deutsch"));
+    app.frames(3);
+    assert!(
+        app.find(Role::Heading(2), "Seifenrechner").is_some() || has_label(&app, "Rezeptname"),
+        "German shown"
+    );
+    assert!(
+        app.reader_view()
+            .iter()
+            .any(|n| n.name.as_deref() == Some("Gewicht") && n.value.as_deref() == Some("500"))
+    );
+    // The floating "?" opens the wiki, in German.
+    assert!(app.press(Role::Button, "Handwerks-Wiki öffnen"));
+    app.frames(2);
+    assert!(app.find(Role::Dialog, "Handwerks-Wiki").is_some());
+    app.key(KeyEvent::press(Key::Escape));
+    app.frames(2);
+    // About.
+    assert!(app.press(Role::Button, "Über"));
+    app.frames(2);
+    assert!(has_label(&app, "\"Hope this helps\" - Ahmi"));
+    // The choice is remembered.
+    drop(app);
+    let app = start_in(&dir, none());
+    assert!(has_label(&app, "Rezeptname"));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn a_1_1_profile_keeps_its_language() {
+    let mut map = BTreeMap::new();
+    map.insert("alien-craft-prefs".to_owned(), r#"{"lastWikiId":"welcome","locale":"ja"}"#.to_owned());
+    let dir = temp("legacy-lang");
+    let app = start_in(&dir, LegacySource::Items(LegacyItems::from_text("http://tauri.localhost", map)));
+    assert!(has_label(&app, "レシピ名"), "Japanese shown");
+    let _ = std::fs::remove_dir_all(dir);
+}

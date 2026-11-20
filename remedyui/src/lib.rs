@@ -10,6 +10,7 @@
 pub mod candle;
 pub mod candle_form;
 pub mod data;
+pub mod i18n;
 pub mod js;
 pub mod legacy;
 pub mod library;

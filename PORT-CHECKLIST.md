@@ -11,7 +11,10 @@ inputs (`remedyui/tests/parity.rs`, fixture from `remedyui/tools/gen-parity.ts`)
 - [x] Soap ⇄ Candle mode toggle (tab list), remembered across runs (`alien-craft-mode` → `mode`)
 - [x] F1 Wiki button; F1 and Ctrl+/ toggle the wiki (app commands, so they can be rebound)
 - [x] Footer: craft-math line with F1 link, safety disclaimer
-- [x] Floating "?" help button → the header's F1 Wiki button and the F1 footer link do the same (one entry per screen instead of two)
+- [x] Floating "?" help button (bottom right, opens the wiki)
+- [x] About dialog (1.1.1): version, source link, sign-off
+- [x] Languages (1.1.0): the 11 catalogs, header choice, system default, 1.1.x `locale` preference imported, plurals, numbers the language's way, translated wiki/copy/print/share text
+- [ ] Web build: Japanese, Korean and Chinese need a font (no system fonts in the browser canvas) — see below
 - [x] Toasts with tone (errors in the error style) and length-based dwell time (2.4 / 3.2 / 4.2 s)
 - [x] Works offline (native app; web build has an offline service worker)
 - [x] New: Appearance choice (Alien Purple night — the shipped look —, Alien Daylight, follow the system) and the system's high-contrast setting

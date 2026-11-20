@@ -2,13 +2,13 @@
 
 use std::rc::Rc;
 
+use super::tw::{self as w, MenuItem};
 use remedy_ui::a11y::{Role, Semantics};
 use remedy_ui::core::{CornerRadii, Insets, Rect};
 use remedy_ui::layout::{Align, Length};
 use remedy_ui::paint::Brush;
 use remedy_ui::reactive::{Memo, Signal};
 use remedy_ui::style::States;
-use remedy_ui::widgets::{self as w, MenuItem};
 use remedy_ui::{El, show};
 use serde_json::Value;
 
@@ -39,7 +39,7 @@ fn today() -> String {
 /// The screen.
 pub fn screen(ctx: &Ctx) -> El {
     let ui = &ctx.ui;
-    let form = Signal::new(SoapForm::new());
+    let form = ctx.soap;
     let result = Memo::new(move || form.with(SoapForm::result));
     let row_keys = Signal::new(Vec::<u64>::new());
     let add_keys = Signal::new(Vec::<u64>::new());
@@ -165,7 +165,7 @@ fn recipe_card(ctx: &Ctx, s: S) -> El {
     let c = ctx.clone();
     let share = w::context_menu(&share, move || {
         let c = c.clone();
-        vec![MenuItem::new("Share full library", move || share_library(&c))]
+        vec![MenuItem::new(crate::i18n::tr("Share full library"), move || share_library(&c))]
     });
     let c = ctx.clone();
     let copy = w::button(ui, "Copy", move || {
@@ -268,10 +268,13 @@ fn saved_row(ctx: &Ctx, form: Signal<SoapForm>, r: &storage::SoapRecipe) -> El {
     let unit = ui.theme().spacing.unit;
     let when = super::wiki::format_saved_at(ui, &r.saved_at);
     let meta = format!(
-        "{} oils · {} · SF {}%{}{}",
-        r.oils.len(),
-        r.lye_type.to_uppercase(),
-        js::to_string(r.superfat_pct),
+        "{}{}{}",
+        crate::i18n::tr(&format!(
+            "{} oils · {} · SF {}%",
+            r.oils.len(),
+            r.lye_type.to_uppercase(),
+            js::to_string(r.superfat_pct)
+        )),
         r.total_oils_weight.map(|t| format!(" · {} {}", fmt_num(t, 2), r.unit)).unwrap_or_default(),
         if when.is_empty() { String::new() } else { format!(" · {when}") },
     );
@@ -284,9 +287,12 @@ fn saved_row(ctx: &Ctx, form: Signal<SoapForm>, r: &storage::SoapRecipe) -> El {
     .variant("quiet")
     .justify(remedy_ui::layout::Justify::Start)
     .grow(1.0);
-    let label = format!("{} — {meta}{}", r.name, if r.notes.is_some() { " · notes" } else { "" });
-    let load =
-        load.semantics(Semantics::new(Role::Button).label(label).action(remedy_ui::a11y::Action::Click));
+    let notes =
+        if r.notes.is_some() { format!(" · {}", crate::i18n::t("common.notes")) } else { String::new() };
+    let label = format!("{} — {meta}{notes}", r.name);
+    let load = load.semantics(
+        Semantics::new(Role::Button).label(crate::i18n::tr(&label)).action(remedy_ui::a11y::Action::Click),
+    );
     let (c, id2) = (ctx.clone(), id.clone());
     let del = w::icon_button(ui, w::Icon::Close, format!("Delete {}", r.name), move || {
         match c.lib.delete_soap(&id2) {
@@ -355,8 +361,8 @@ fn save_recipe(ctx: &Ctx, form: Signal<SoapForm>) {
                 "Overwrite saved recipe?",
                 format!("A saved soap recipe named “{cname}” already exists. Overwrite it?"),
                 vec![
-                    w::DialogButton::new("Overwrite", "danger", move || commit()),
-                    w::DialogButton::new("Cancel", "quiet", || {}),
+                    w::DialogButton::new(crate::i18n::tr("Overwrite"), "danger", move || commit()),
+                    w::DialogButton::new(crate::i18n::tr("Cancel"), "quiet", || {}),
                 ],
             );
         }
@@ -540,8 +546,9 @@ fn oils_card(ctx: &Ctx, s: S) -> El {
             st.state(States::INVALID, bad);
         })
         .semantics(move || {
-            Semantics::new(Role::Status)
-                .label(form.with(|f| format!("{} — {}", f.status_totals(), f.status_hint())))
+            Semantics::new(Role::Status).label(form.with(|f| {
+                format!("{} — {}", crate::i18n::tr(&f.status_totals()), crate::i18n::tr(&f.status_hint()))
+            }))
         });
     w::card(ui)
         .gap(unit * 2.0)
@@ -601,7 +608,7 @@ fn oil_row(ctx: &Ctx, form: Signal<SoapForm>, key: u64) -> El {
     .semantics(move || {
         let n = oil_name();
         Semantics::new(Role::Button)
-            .label(format!("Wiki: {}", if n.is_empty() { "oil".to_owned() } else { n }))
+            .label(crate::i18n::tr(&format!("Wiki: {}", if n.is_empty() { "oil".to_owned() } else { n })))
             .action(remedy_ui::a11y::Action::Click)
     });
     w::tooltip(&info, move || {
@@ -778,7 +785,10 @@ fn additive_row(ctx: &Ctx, form: Signal<SoapForm>, key: u64) -> El {
         .semantics(move || {
             let n = add_name();
             Semantics::new(Role::Button)
-                .label(format!("Wiki: {}", if n.is_empty() { "additive".to_owned() } else { n }))
+                .label(crate::i18n::tr(&format!(
+                    "Wiki: {}",
+                    if n.is_empty() { "additive".to_owned() } else { n }
+                )))
                 .action(remedy_ui::a11y::Action::Click)
         });
     w::tooltip(&info, move || {
@@ -999,9 +1009,9 @@ fn results_card(ctx: &Ctx, s: S) -> El {
         let lab = Rc::new(lye_label);
         let l2 = lab.clone();
         stat(ui, "NaOH (with SF)", n(|r| r.lye_with_superfat), u, true).semantics(move || {
-            Semantics::new(Role::Group).label(l2()).value(
-                result.with(|r| if r.locked { "—".to_owned() } else { js::to_string(r.lye_with_superfat) }),
-            )
+            Semantics::new(Role::Group).label(crate::i18n::tr(&l2())).value(crate::i18n::tr(
+                &result.with(|r| if r.locked { "—".to_owned() } else { js::to_string(r.lye_with_superfat) }),
+            ))
         })
     };
     let total_oils = move || {
@@ -1107,10 +1117,9 @@ fn quality_panel(ctx: &Ctx, s: S) -> El {
         let value = w::text(ui, move || {
             m3().map(|q| {
                 format!(
-                    "{}  ideal {}–{}",
-                    q.value.map_or("—".into(), js::to_string),
-                    js::to_string(min),
-                    js::to_string(max)
+                    "{}  {}",
+                    crate::i18n::tr(&q.value.map_or("—".into(), js::to_string)),
+                    crate::i18n::tr(&format!("ideal {}–{}", js::to_string(min), js::to_string(max)))
                 )
             })
             .unwrap_or_default()
@@ -1140,9 +1149,10 @@ fn quality_panel(ctx: &Ctx, s: S) -> El {
                     Some("low") => "Below ideal range",
                     _ => "Above ideal range",
                 };
-                Semantics::new(Role::Group).label(l2.clone()).value(format!(
-                    "{} — {status}",
-                    q.and_then(|q| q.value).map_or("—".into(), js::to_string)
+                Semantics::new(Role::Group).label(crate::i18n::tr(&l2)).value(format!(
+                    "{} — {}",
+                    crate::i18n::tr(&q.and_then(|q| q.value).map_or("—".into(), js::to_string)),
+                    crate::i18n::tr(status)
                 ))
             });
         let _ = key;
