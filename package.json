@@ -1,13 +1,14 @@
 {
   "name": "alexs-craft-calc",
   "private": true,
-  "version": "1.0.10",
+  "version": "1.1.1",
   "type": "module",
   "description": "Alex's Craft Calc — soap + candle calculator (cold-process lye, wax & FO, craft wiki). Offline Windows, Android & PWA.",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "test": "tsx src/lib/calc.test.ts",
+    "test": "tsx src/lib/calc.test.ts && tsx src/lib/parseDecimal.test.ts && tsx src/lib/appVersion.test.ts && tsx src/i18n/locale.test.ts && tsx src/i18n/check.test.ts",
+    "i18n:extract": "tsx scripts/i18n-extract.ts",
     "icons": "node scripts/make-icons.mjs",
     "lint": "oxlint",
     "preview": "vite preview",
