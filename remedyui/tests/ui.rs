@@ -175,3 +175,28 @@ fn the_first_run_brings_over_the_previous_versions_library() {
     );
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn recalculate_balances_the_oils_and_unlocks_the_results() {
+    let dir = temp("recalc");
+    let mut app = start_in(&dir, none());
+    set_number(&mut app, "Weight", 0, "500");
+    assert_eq!(value(&app, Role::Group, "NaOH (with SF)").as_deref(), Some("—"));
+    // The button in the locked results card works too (the second one in reading order).
+    let ui = app.ui().expect("window");
+    let buttons: Vec<_> = app
+        .reader_view()
+        .into_iter()
+        .filter(|n| n.role == Role::Button && n.name.as_deref() == Some("Recalculate"))
+        .collect();
+    assert_eq!(buttons.len(), 2, "one by the oils, one on the results");
+    assert!(ui.accessibility_action(buttons[1].id, remedy_ui::a11y::Action::Click));
+    app.frames(2);
+    assert_ne!(value(&app, Role::Group, "NaOH (with SF)").as_deref(), Some("—"));
+    assert!(
+        app.reader_view()
+            .iter()
+            .any(|n| n.role == Role::Status && n.name.as_deref().is_some_and(|s| s.contains("Unlocked")))
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}

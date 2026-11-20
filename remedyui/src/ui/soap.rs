@@ -467,7 +467,7 @@ fn oils_card(ctx: &Ctx, s: S) -> El {
     w::tooltip(&apply, "Set each oil weight from its % × Total oils");
     let hint = w::text(
         ui,
-        "Total oils is the recipe ceiling — it does not change when you type individual oils. Edit weight or % on any row (both always live). Changing one field updates only that oil against the ceiling; other oils stay put. Results unlock when oil weights and percentages both match this total (100%).",
+        "Total oils is your batch size. Type a weight or a % on any oil — the other updates live. Results unlock when the oils add up to Total oils (100%); press Recalculate to balance them for you.",
     )
     .variant("muted");
 
@@ -529,6 +529,8 @@ fn oils_card(ctx: &Ctx, s: S) -> El {
         .child(w::text(ui, move || form.with(SoapForm::status_totals)).variant("strong"))
         .child(w::text(ui, move || form.with(SoapForm::status_hint)))
         .variant("status");
+    let c = ctx.clone();
+    let recalc = recalc_button(&c, form);
     let st = status.clone();
     let status = status
         .bind(move || {
@@ -554,8 +556,20 @@ fn oils_card(ctx: &Ctx, s: S) -> El {
         .child(header)
         .child(empty)
         .child(rows)
-        .child(add)
+        .child(w::wrap(ui).gap(unit).child(add).child(recalc))
         .child(status)
+}
+
+/// Recalculate: balances the oils against Total oils so the results unlock.
+fn recalc_button(ctx: &Ctx, form: Signal<SoapForm>) -> El {
+    let c = ctx.clone();
+    let b = w::button(&ctx.ui, "Recalculate", move || {
+        let m = fields::act(form, |f| f.recalculate()).unwrap_or_default();
+        c.toast(&m);
+    })
+    .variant("primary");
+    w::tooltip(&b, "Balance the oils against Total oils and refresh the results");
+    b
 }
 
 fn oil_row(ctx: &Ctx, form: Signal<SoapForm>, key: u64) -> El {
@@ -1041,7 +1055,7 @@ fn results_card(ctx: &Ctx, s: S) -> El {
         .gap(unit * 2.0)
         .padding(Insets::all(unit * 3.0))
         .fill_width()
-        .child(card_head(ui, "Batch results", vec![copy]))
+        .child(card_head(ui, "Batch results", vec![recalc_button(ctx, form), copy]))
         .child(warnings)
         .child(grid)
         .child(meta)

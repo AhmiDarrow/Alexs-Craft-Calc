@@ -525,6 +525,27 @@ impl SoapForm {
         format!("Scaled oils to Total oils ({} {})", fmt_num(target, 4), self.u())
     }
 
+    /// Recalculate: brings the oils into balance with the ceiling so the results unlock, by
+    /// the fix that fits what was typed. Returns the toast.
+    pub fn recalculate(&mut self) -> String {
+        if self.recipe_balanced() {
+            return "Results are up to date".into();
+        }
+        let sum = self.weight_sum();
+        if !(self.parsed_total_oils() > 0.0) {
+            if !(sum > 0.0) {
+                return "Enter a Total oils weight or some oil weights first".into();
+            }
+            // No ceiling yet: the oils as typed become the batch.
+            self.total_oils_weight = fmt_num(sum, 4);
+            for r in self.rows.iter_mut().filter(|r| !r.oil_id.is_empty()) {
+                r.pct = fmt_num(soap::pct_of_ceiling(pf0(&r.amount), sum), 2);
+            }
+            return format!("Total oils set to the oil weights ({} {})", fmt_num(sum, 4), self.u());
+        }
+        if self.pct_ok() { self.apply_percents_to_ceiling() } else { self.scale_weights_to_ceiling() }
+    }
+
     /// Reset. Returns the toast.
     pub fn reset_defaults(&mut self) -> String {
         let d = soap::default_input();
@@ -889,5 +910,28 @@ impl SoapForm {
             meta.push(format!("{}% of oils", fmt_num(pct, 2)));
         }
         AdditiveRowView { status: if usage == "good" { "ok" } else { usage }, label, title, meta }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn recalculate_picks_the_fix_that_fits() {
+        let mut f = SoapForm::new();
+        assert_eq!(f.recalculate(), "Results are up to date");
+        let k = f.rows[0].key;
+        f.update_row_weight(k, "999");
+        assert!(!f.recipe_balanced());
+        f.recalculate();
+        assert!(f.recipe_balanced(), "scaled to the ceiling");
+        // No ceiling: the oils as typed become the batch.
+        f.total_oils_weight = String::new();
+        f.recalculate();
+        assert!(f.recipe_balanced(), "ceiling from the weights");
+        f.rows.clear();
+        f.total_oils_weight = String::new();
+        assert!(f.recalculate().starts_with("Enter"));
     }
 }
