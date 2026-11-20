@@ -411,14 +411,14 @@ pub fn format_saved_at(ui: &Ui, iso: &str) -> String {
 pub fn print_sheet(ctx: &Ctx, title: &str, heading: &str, text: &str, note: &str) {
     let tr = crate::i18n::tr_lines;
     let html = print_html(&tr(title), &tr(heading), &tr(text), &tr(note));
-    #[cfg(target_arch = "wasm32")]
-    {
-        if crate::web::print_html(&html).is_ok() {
-            return;
+    // The platform's print dialog; where there is none, the page is saved to print later.
+    let (c, name, page) =
+        (ctx.clone(), format!("{}.html", storage::safe_filename(title, "recipe")), html.clone());
+    ctx.app.print_html(Some(&ctx.window), tr(title), html, move |r| {
+        if r.is_err() {
+            c.save_file(name, page);
         }
-    }
-    let name = format!("{}.html", storage::safe_filename(title, "recipe"));
-    ctx.save_file(name, html);
+    });
 }
 
 fn escape_html(s: &str) -> String {
