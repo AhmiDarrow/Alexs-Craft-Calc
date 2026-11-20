@@ -28,7 +28,7 @@ inputs (`remedyui/tests/parity.rs`, fixture from `remedyui/tools/gen-parity.ts`)
 - [x] Load: recipe / library / bare recipe / array files, merged by name (parity of the parser)
 - [x] Share: platform share sheet with the recipe file (Android chooser, Windows share window, browser `navigator.share`), falling back to saving the file, then to the clipboard; context menu "Share full library"; "Share library" in the saved list
 - [x] Copy (batch text, parity of the text), Copy results
-- [x] Print: the same print sheet; in a browser it prints through the print dialog, elsewhere it is saved as a page to print (RemedyUI has no native printing yet — see report)
+- [x] Print: the same print sheet through the platform's print dialog (RemedyUI `App::print_html`: Windows' HTML printer, Android's print manager, the browser's print dialog); saved as a page only where a platform has no dialog
 - [x] Total oils ceiling; editing it keeps each oil's % (parity)
 - [x] Scale weights to total; Apply % to weights (parity, toasts)
 - [x] New: Recalculate (by the oils and on the results card) balances the oils against Total oils and unlocks the results

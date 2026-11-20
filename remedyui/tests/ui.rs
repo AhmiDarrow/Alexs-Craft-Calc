@@ -323,3 +323,15 @@ fn a_1_1_profile_keeps_its_language() {
     assert!(has_label(&app, "レシピ名"), "Japanese shown");
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn print_opens_the_print_dialog_with_the_recipe() {
+    let dir = temp("print");
+    let mut app = start_in(&dir, none());
+    assert!(app.press(Role::Button, "Print"));
+    app.frames(2);
+    let prints = app.host().prints().to_vec();
+    assert_eq!(prints.len(), 1, "one page to the print dialog");
+    assert!(prints[0].2.contains("Olive Oil"), "the recipe is on the page");
+    let _ = std::fs::remove_dir_all(dir);
+}

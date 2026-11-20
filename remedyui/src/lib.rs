@@ -18,8 +18,6 @@ pub mod soap;
 pub mod soap_form;
 pub mod storage;
 pub mod ui;
-#[cfg(target_arch = "wasm32")]
-pub mod web;
 pub mod wiki;
 
 use remedy_ui::{App, AppConfig};

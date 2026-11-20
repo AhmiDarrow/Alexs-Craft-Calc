@@ -24,6 +24,7 @@ All notable changes to **Alex's Craft Calc** are documented here.
   toasts, copied, printed and shared recipe text are translated. A 1.1.x profile keeps its language.
 - **About** dialog: version, source link, and Ahmi's sign-off.
 - The floating **?** wiki button is back.
+- **Print** opens the system's print dialog on Windows and Android (Save as PDF there too), as the browser does — no more saving a page to print.
 
 ### Changed
 - Soap ⇄ Candle and a change of language keep the recipe being edited.
