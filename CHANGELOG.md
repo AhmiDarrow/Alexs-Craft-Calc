@@ -4,17 +4,6 @@ All notable changes to **Alex's Craft Calc** are documented here.
 
 ## [Unreleased]
 
-## [2.0.0] — 2026-11-19 — RemedyUI edition (`remedyui/`)
-
-### Added
-- **Recalculate** (soap) — one button, by the oils and on the results card, that balances the oils
-  against Total oils so locked results unlock: % that total 100 set the weights, otherwise the
-  weights scale to the ceiling, and with no ceiling the typed weights become Total oils
-- The whole app ported to RemedyUI 1.0 (native Windows, Android, web) — see `PORT-CHECKLIST.md`
-
-### Changed
-- Shorter, plainer hint under Total oils that points at Recalculate
-
 ## [2.1.0] — 2026-11-20 — RemedyUI edition
 
 ### Added (catching up with 1.1.0–1.1.1)
@@ -28,6 +17,35 @@ All notable changes to **Alex's Craft Calc** are documented here.
 
 ### Changed
 - Soap ⇄ Candle and a change of language keep the recipe being edited.
+
+## [2.0.0] — 2026-11-19 — RemedyUI edition (`remedyui/`)
+
+### Added
+- **Recalculate** (soap) — one button, by the oils and on the results card, that balances the oils
+  against Total oils so locked results unlock: % that total 100 set the weights, otherwise the
+  weights scale to the ceiling, and with no ceiling the typed weights become Total oils
+- The whole app ported to RemedyUI 1.0 (native Windows, Android, web) — see `PORT-CHECKLIST.md`
+
+### Changed
+- Shorter, plainer hint under Total oils that points at Recalculate
+
+## [1.1.1] — 2026-11-15
+
+### Added
+- Added an About section with version info.
+
+### Changed
+- Android `versionName` / `versionCode` → **1.1.1** / `12`
+
+## [1.1.0] — 2026-11-15
+
+### Added
+- Now available in Spanish, French, German, Portuguese (Brazil), Italian, Russian, Polish, Japanese, Korean and Chinese (Simplified). Apps use your system language by default; change it any time in Settings → Language.
+
+### Changed
+- Android `versionName` / `versionCode` → **1.1.0** / `11`
+
+"Hope this helps" - Ahmi
 
 ## [1.0.10] — 2026-09-08
 

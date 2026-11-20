@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/AhmiDarrow/Alexs-Craft-Calc/releases/tag/v1.0.10"><img alt="version" src="https://img.shields.io/badge/version-1.0.10-a855f7?style=for-the-badge" /></a>
+  <a href="https://github.com/AhmiDarrow/Alexs-Craft-Calc/releases/tag/v1.1.1"><img alt="version" src="https://img.shields.io/badge/version-1.1.1-a855f7?style=for-the-badge" /></a>
   <a href="#safety"><img alt="offline" src="https://img.shields.io/badge/runs-offline-0f172a?style=for-the-badge" /></a>
   <a href="#native-builds"><img alt="platforms" src="https://img.shields.io/badge/Windows%20·%20Android%20·%20PWA-1e1b4b?style=for-the-badge" /></a>
   <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/local%20first-no%20account-312e81?style=for-the-badge" /></a>
@@ -133,8 +133,8 @@ Installers are built **on GitHub**, not on your laptop.
 
 ```bash
 # bump version in package.json + src-tauri + android/app/build.gradle, then:
-git tag v1.0.10
-git push origin v1.0.9
+git tag v1.1.1
+git push origin v1.1.1
 ```
 
 | Workflow | When | Output |
@@ -142,7 +142,7 @@ git push origin v1.0.9
 | [CI](.github/workflows/ci.yml) | PR / push to `main` | `npm test` + typecheck |
 | [Release](.github/workflows/release.yml) | tag `v*` (or manual dispatch) | Windows MSI/NSIS + Android debug APK on the [GitHub Release](https://github.com/AhmiDarrow/Alexs-Craft-Calc/releases) |
 
-Re-run a tag build anytime: **Actions → Release → Run workflow** (pass the tag, e.g. `v1.0.9`).
+Re-run a tag build anytime: **Actions → Release → Run workflow** (pass the tag, e.g. `v1.1.1`).
 
 ### Local native builds (optional)
 
@@ -183,14 +183,16 @@ START.bat      One-click web launcher
 
 ## Changelog
 
-See **[CHANGELOG.md](./CHANGELOG.md)** — current release **v1.0.9**.
+See **[CHANGELOG.md](./CHANGELOG.md)** — current release **v1.1.1**.
 
 ## Downloads
 
-GitHub Releases: [v1.0.9](https://github.com/AhmiDarrow/Alexs-Craft-Calc/releases/tag/v1.0.9)
+GitHub Releases: [v1.1.1](https://github.com/AhmiDarrow/Alexs-Craft-Calc/releases/tag/v1.1.1)
 
 ---
 
 <p align="center">
-  <sub>Built for Ahmi · Alex's Craft Calc <strong>v1.0.9</strong> · local-first craft math</sub>
+  <sub>Built for Ahmi · Alex's Craft Calc <strong>v1.1.1</strong> · local-first craft math</sub>
 </p>
+
+"Hope this helps" - Ahmi
