@@ -41,7 +41,13 @@ pub fn attach(ctx: &Ctx) {
                 let panel = panel(&c, initial, last);
                 let layer = c.ui.overlay(w::fill_window(panel.clone()));
                 // Keys go to the wiki while it is open: Escape and Back step back from there.
-                panel.focus_first();
+                // On a phone the panel takes focus, not the search field: that would pop up
+                // the keyboard.
+                if cfg!(target_os = "android") {
+                    panel.focus();
+                } else {
+                    panel.focus_first();
+                }
                 *shown.borrow_mut() = Some(layer);
             }
         });
@@ -139,15 +145,22 @@ fn panel(ctx: &Ctx, initial: Option<String>, last: Signal<String>) -> El {
         .child(w::column(ui).grow(1.0).child(kicker).child(title))
         .child(w::row(ui).gap(unit).align(Align::Center).child(search).child(close_btn));
 
-    // Categories.
-    let cats = data::data().wiki_categories.iter().fold(
-        w::wrap(ui)
-            .gap(unit)
-            .semantics(Semantics::new(Role::TabList).label(crate::i18n::tr("Wiki categories")))
-            .child(cat_button(ui, "all", "All", category)),
-        |r, c| r.child(cat_button(ui, &c.id, &format!("{} {}", c.icon, i18n::tr(&c.label)), category)),
-    );
-    let cats = show(ui, show_list.clone(), move || cats.clone()).el();
+    // Categories: above the list on wide windows; on phones they scroll with it, so they
+    // never squeeze the list away.
+    let make_cats = {
+        let u = ui.clone();
+        move || {
+            data::data().wiki_categories.iter().fold(
+                w::wrap(&u)
+                    .gap(unit)
+                    .semantics(Semantics::new(Role::TabList).label(crate::i18n::tr("Wiki categories")))
+                    .child(cat_button(&u, "all", "All", category)),
+                |r, c| r.child(cat_button(&u, &c.id, &format!("{} {}", c.icon, i18n::tr(&c.label)), category)),
+            )
+        }
+    };
+    let (sl, nc) = (show_list.clone(), narrow.clone());
+    let cats = show(ui, move || sl() && !nc(), make_cats.clone()).el();
 
     // The list.
     let nav_box = w::column(ui).gap(unit / 2.0).fill_width();
@@ -230,7 +243,9 @@ fn panel(ctx: &Ctx, initial: Option<String>, last: Signal<String>) -> El {
         let u = ui.clone();
         move || {
             let n6 = n6.clone();
-            let list = w::scroll(&u).child(w::column(&u).gap(unit).child(nav.clone()).child(empty.clone()));
+            let phone_cats = show(&u, n6.clone(), make_cats.clone()).el();
+            let list = w::scroll(&u)
+                .child(w::column(&u).gap(unit).child(phone_cats).child(nav.clone()).child(empty.clone()));
             let l2 = list.clone();
             list.bind(move || {
                 let wide = !n6();
@@ -265,7 +280,8 @@ fn panel(ctx: &Ctx, initial: Option<String>, last: Signal<String>) -> El {
     let body = w::row(ui).gap(unit * 3.0).grow(1.0).fill_width().child(nav).child(article_view);
     let cl = close.clone();
     let n8 = narrow.clone();
-    w::column(ui)
+    let panel = w::column(ui)
+        .focusable(true)
         .gap(unit * 2.0)
         .padding(Insets::all(unit * 3.0))
         .grow(1.0)
@@ -295,7 +311,10 @@ fn panel(ctx: &Ctx, initial: Option<String>, last: Signal<String>) -> El {
                 }
                 _ => false,
             }
-        })
+        });
+    // Focusable, so focus falls back here when the list or a button it was on goes away, and
+    // Back keeps stepping back through the wiki instead of closing the app.
+    panel
 }
 
 fn cat_button(ui: &Ui, id: &str, label: &str, category: Signal<String>) -> El {
