@@ -323,6 +323,30 @@
     "ru": "Результаты актуальны",
     "zh-CN": "结果已是最新"
   },
+  "Save print sheet": {
+    "de": "Druckblatt speichern",
+    "es": "Guardar hoja de impresión",
+    "fr": "Enregistrer la fiche d’impression",
+    "it": "Salva foglio di stampa",
+    "ja": "印刷用シートを保存",
+    "ko": "인쇄용 시트 저장",
+    "pl": "Zapisz arkusz do druku",
+    "pt-BR": "Salvar folha de impressão",
+    "ru": "Сохранить лист для печати",
+    "zh-CN": "保存打印页"
+  },
+  "Web pages": {
+    "de": "Webseiten",
+    "es": "Páginas web",
+    "fr": "Pages web",
+    "it": "Pagine web",
+    "ja": "Web ページ",
+    "ko": "웹 페이지",
+    "pl": "Strony internetowe",
+    "pt-BR": "Páginas da web",
+    "ru": "Веб-страницы",
+    "zh-CN": "网页"
+  },
   "Save recipe file": {
     "de": "Rezeptdatei speichern",
     "es": "Guardar archivo de receta",
