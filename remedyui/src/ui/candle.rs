@@ -1,11 +1,11 @@
 //! The candle calculator screen.
 
+use super::tw::{self as w, MenuItem};
 use remedy_ui::a11y::{Role, Semantics};
 use remedy_ui::core::Insets;
 use remedy_ui::layout::{Align, Length};
 use remedy_ui::reactive::{Memo, Signal};
 use remedy_ui::style::States;
-use remedy_ui::widgets::{self as w, MenuItem};
 use remedy_ui::{El, show};
 use serde_json::Value;
 
@@ -23,7 +23,7 @@ use crate::storage::{self, PackKind};
 pub fn screen(ctx: &Ctx) -> El {
     let ui = &ctx.ui;
     let unit = ui.theme().spacing.unit;
-    let form = Signal::new(CandleForm::new());
+    let form = ctx.candle;
     let result = Memo::new(move || form.with(CandleForm::result));
     w::column(ui)
         .gap(unit * 3.0)
@@ -123,7 +123,7 @@ fn recipe_card(ctx: &Ctx, form: Signal<CandleForm>) -> El {
     let c = ctx.clone();
     let share = w::context_menu(&share, move || {
         let c = c.clone();
-        vec![MenuItem::new("Share full library", move || share_library(&c))]
+        vec![MenuItem::new(crate::i18n::tr("Share full library"), move || share_library(&c))]
     });
     let c = ctx.clone();
     let copy =
@@ -225,10 +225,13 @@ fn saved_row(ctx: &Ctx, form: Signal<CandleForm>, r: &storage::CandleRecipe) -> 
     let unit = ui.theme().spacing.unit;
     let when = super::wiki::format_saved_at(ui, &r.saved_at);
     let meta = format!(
-        "{} · {} vessels · {}% FO{}",
-        data::wax(&r.wax_id).map_or(r.wax_id.as_str(), |w| w.name.as_str()),
-        js::to_string(r.vessel_count),
-        js::to_string(r.fragrance_pct),
+        "{}{}",
+        crate::i18n::tr(&format!(
+            "{} · {} vessels · {}% FO",
+            data::wax(&r.wax_id).map_or(r.wax_id.as_str(), |w| w.name.as_str()),
+            js::to_string(r.vessel_count),
+            js::to_string(r.fragrance_pct),
+        )),
         if when.is_empty() { String::new() } else { format!(" · {when}") },
     );
     let (c, rec) = (ctx.clone(), r.clone());
@@ -240,7 +243,16 @@ fn saved_row(ctx: &Ctx, form: Signal<CandleForm>, r: &storage::CandleRecipe) -> 
     .justify(remedy_ui::layout::Justify::Start)
     .semantics(
         Semantics::new(Role::Button)
-            .label(format!("{} — {meta}{}", r.name, if r.notes.is_some() { " · notes" } else { "" }))
+            .label(format!(
+                "{} — {}{}",
+                r.name,
+                crate::i18n::tr(&meta),
+                if r.notes.is_some() {
+                    format!(" · {}", crate::i18n::t("common.notes"))
+                } else {
+                    String::new()
+                }
+            ))
             .action(remedy_ui::a11y::Action::Click),
     );
     let (c, id) = (ctx.clone(), r.id.clone());
@@ -310,8 +322,8 @@ fn save_recipe(ctx: &Ctx, form: Signal<CandleForm>) {
                 "Overwrite saved recipe?",
                 format!("A saved candle recipe named “{cname}” already exists. Overwrite it?"),
                 vec![
-                    w::DialogButton::new("Overwrite", "danger", move || commit()),
-                    w::DialogButton::new("Cancel", "quiet", || {}),
+                    w::DialogButton::new(crate::i18n::tr("Overwrite"), "danger", move || commit()),
+                    w::DialogButton::new(crate::i18n::tr("Cancel"), "quiet", || {}),
                 ],
             );
         }
@@ -392,28 +404,37 @@ fn wax_card(ctx: &Ctx, form: Signal<CandleForm>) -> El {
         let lines = mirror(&boxed, move || {
             form.with(|f| {
                 let Some(w) = data::wax(&f.wax_id) else { return Vec::new() };
+                // Each piece translated on its own; the line is joined after.
+                let tr = crate::i18n::tr;
                 let mut out = vec![format!(
-                    "FO load {}–{}% · typical {}%{}{}",
-                    js::to_string(w.fragrance_min),
-                    js::to_string(w.fragrance_max),
-                    js::to_string(w.fragrance_typical),
+                    "{}{}{}",
+                    tr(&format!(
+                        "FO load {}–{}% · typical {}%",
+                        js::to_string(w.fragrance_min),
+                        js::to_string(w.fragrance_max),
+                        js::to_string(w.fragrance_typical)
+                    )),
                     w.melt_point_f
                         .filter(|v| *v != 0.0)
-                        .map(|v| format!(" · melt ~{}°F", js::to_string(v)))
+                        .map(|v| format!(" · {}", tr(&format!("melt ~{}°F", js::to_string(v)))))
                         .unwrap_or_default(),
                     w.pour_temp_f
                         .filter(|v| *v != 0.0)
-                        .map(|v| format!(" · pour ~{}°F", js::to_string(v)))
+                        .map(|v| format!(" · {}", tr(&format!("pour ~{}°F", js::to_string(v)))))
                         .unwrap_or_default(),
                 )];
                 if let Some(n) = w.notes.clone().filter(|n| !n.is_empty()) {
-                    out.push(n);
+                    out.push(crate::i18n::tx(&format!("wax.{}.notes", w.id), &n));
                 }
                 if let Some(c) = w.cure_days.clone().filter(|n| !n.is_empty()) {
-                    out.push(format!("Cure: {c}"));
+                    out.push(tr(&format!("Cure: {}", crate::i18n::tx(&format!("wax.{}.cure", w.id), &c))));
                 }
                 if let Some(b) = &w.best_for {
-                    out.push(b.join(" · "));
+                    let list: Vec<String> = b
+                        .iter()
+                        .map(|u| crate::i18n::tx(&format!("bestFor.{}", crate::i18n::tag_key(u)), u))
+                        .collect();
+                    out.push(list.join(" · "));
                 }
                 out
             })
@@ -428,7 +449,12 @@ fn wax_card(ctx: &Ctx, form: Signal<CandleForm>) -> El {
             .iter()
             .map(|v| {
                 if v.fill_oz > 0.0 {
-                    format!("{} (~{} oz wax)", v.label, js::to_string(v.fill_oz))
+                    // Translated in pieces: the label, then the fill.
+                    format!(
+                        "{}{}",
+                        crate::i18n::tx(&format!("vessel.{}", v.id), &v.label),
+                        crate::i18n::tr(&format!(" (~{} oz wax)", js::to_string(v.fill_oz)))
+                    )
                 } else {
                     v.label.clone()
                 }
@@ -644,15 +670,17 @@ fn results_card(ctx: &Ctx, form: Signal<CandleForm>, result: Memo<CandleResult>)
                     l.shrink = 1.0;
                 })
                 .child(w::heading(&u3, 3, "Pour notes"))
-                .child(w::text(&u3, move || result.with(|r| r.pour_hint.clone())))
+                .child(w::text(&u3, move || result.with(|r| crate::i18n::tr_parts(&r.pour_hint, " · "))))
         },
     )
     .el();
     let wick_note = w::text(ui, move || {
         form.with(|f| {
             data::wax(&f.wax_id)
-                .and_then(|w| w.wick_notes.clone())
-                .map(|n| format!("Wick note: {n}"))
+                .and_then(|w| {
+                    w.wick_notes.clone().map(|n| crate::i18n::tx(&format!("wax.{}.wick", w.id), &n))
+                })
+                .map(|n| format!("{} {n}", crate::i18n::t("candle.wickNote")))
                 .unwrap_or_default()
         })
     });

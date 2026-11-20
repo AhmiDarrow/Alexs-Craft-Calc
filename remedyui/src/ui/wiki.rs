@@ -5,18 +5,19 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use super::tw as w;
 use remedy_ui::a11y::{Role, Semantics};
 use remedy_ui::core::Insets;
 use remedy_ui::input::{Key, KeyEvent};
 use remedy_ui::layout::{Align, Length};
 use remedy_ui::reactive::{Persist, Signal, untrack};
 use remedy_ui::view::{RichText, TextStylePatch};
-use remedy_ui::widgets as w;
 use remedy_ui::{El, Ui, show};
 
 use super::Ctx;
 use super::soap::mirror;
 use crate::data;
+use crate::i18n;
 use crate::library::{VERSION, keys};
 use crate::storage;
 use crate::wiki::{self, Block};
@@ -56,11 +57,11 @@ enum NavItem {
 fn panel(ctx: &Ctx, initial: Option<String>, last: Signal<String>) -> El {
     let ui = &ctx.ui;
     let unit = ui.theme().spacing.unit;
-    let all = wiki::articles();
-    let jump = initial.as_deref().filter(|id| wiki::article(id).is_some()).map(str::to_owned);
+    let all = i18n::articles();
+    let jump = initial.as_deref().filter(|id| i18n::article(id).is_some()).map(str::to_owned);
     let start = jump
         .clone()
-        .or_else(|| last.get_untracked().ok().filter(|id| wiki::article(id).is_some()))
+        .or_else(|| last.get_untracked().ok().filter(|id| i18n::article(id).is_some()))
         .unwrap_or_else(|| "welcome".into());
     let active = Signal::new(start);
     let query = Signal::new(String::new());
@@ -96,7 +97,7 @@ fn panel(ctx: &Ctx, initial: Option<String>, last: Signal<String>) -> El {
     let n3 = narrow.clone();
     let title = w::heading(ui, 2, move || {
         if n3() && reading.get() {
-            wiki::article(&active.get()).map(|a| a.title.clone()).unwrap_or_default()
+            i18n::article(&active.get()).map(|a| a.title.clone()).unwrap_or_default()
         } else {
             "Alex's Craft Knowledge".to_owned()
         }
@@ -126,7 +127,11 @@ fn panel(ctx: &Ctx, initial: Option<String>, last: Signal<String>) -> El {
     let n5 = narrow.clone();
     let close_btn =
         w::button(ui, move || if n5() { "Close".to_owned() } else { "Esc".to_owned() }, move || cl())
-            .semantics(Semantics::new(Role::Button).label("Close").action(remedy_ui::a11y::Action::Click));
+            .semantics(
+                Semantics::new(Role::Button)
+                    .label(crate::i18n::tr("Close"))
+                    .action(remedy_ui::a11y::Action::Click),
+            );
     let header = w::wrap(ui)
         .gap(unit * 2.0)
         .align(Align::Center)
@@ -138,9 +143,9 @@ fn panel(ctx: &Ctx, initial: Option<String>, last: Signal<String>) -> El {
     let cats = data::data().wiki_categories.iter().fold(
         w::wrap(ui)
             .gap(unit)
-            .semantics(Semantics::new(Role::TabList).label("Wiki categories"))
+            .semantics(Semantics::new(Role::TabList).label(crate::i18n::tr("Wiki categories")))
             .child(cat_button(ui, "all", "All", category)),
-        |r, c| r.child(cat_button(ui, &c.id, &format!("{} {}", c.icon, c.label), category)),
+        |r, c| r.child(cat_button(ui, &c.id, &format!("{} {}", c.icon, i18n::tr(&c.label)), category)),
     );
     let cats = show(ui, show_list.clone(), move || cats.clone()).el();
 
@@ -153,13 +158,13 @@ fn panel(ctx: &Ctx, initial: Option<String>, last: Signal<String>) -> El {
             wiki::search(all, &q).into_iter().filter(|a| cat == "all" || a.category == cat).collect();
         let mut out = Vec::new();
         if !crate::js::trim(&q).is_empty() {
-            out.push(NavItem::Group(format!("⌕ Search results ({})", found.len())));
+            out.push(NavItem::Group(format!("⌕ {} ({})", i18n::t("wiki.searchResults"), found.len())));
             out.extend(found.iter().map(|a| NavItem::Article(a.id.clone())));
         } else {
             for c in &data::data().wiki_categories {
                 let group: Vec<_> = found.iter().filter(|a| a.category == c.id).collect();
                 if !group.is_empty() {
-                    out.push(NavItem::Group(format!("{} {} ({})", c.icon, c.label, group.len())));
+                    out.push(NavItem::Group(format!("{} {} ({})", c.icon, i18n::tr(&c.label), group.len())));
                     out.extend(group.iter().map(|a| NavItem::Article(a.id.clone())));
                 }
             }
@@ -178,7 +183,7 @@ fn panel(ctx: &Ctx, initial: Option<String>, last: Signal<String>) -> El {
         move |i| match i {
             NavItem::Group(g) => w::heading(&u, 3, g.clone()),
             NavItem::Article(id) => {
-                let a = wiki::article(id).cloned().unwrap_or_else(|| data::WikiArticle {
+                let a = i18n::article(id).cloned().unwrap_or_else(|| data::WikiArticle {
                     id: id.clone(),
                     title: id.clone(),
                     category: String::new(),
@@ -267,7 +272,7 @@ fn panel(ctx: &Ctx, initial: Option<String>, last: Signal<String>) -> El {
         .fill_width()
         .variant("wiki")
         .style(remedy_ui::style::Style::new().background(remedy_ui::style::ColorRole::Bg))
-        .semantics(Semantics::new(Role::Dialog).label("Craft wiki"))
+        .semantics(Semantics::new(Role::Dialog).label(crate::i18n::tr("Craft wiki")))
         .child(header)
         .child(cats)
         .child(body)
@@ -307,7 +312,7 @@ fn cat_button(ui: &Ui, id: &str, label: &str, category: Signal<String>) -> El {
 fn article(ctx: &Ctx, id: &str, mobile_article: bool, query: Signal<String>, reading: Signal<bool>) -> El {
     let ui = &ctx.ui;
     let unit = ui.theme().spacing.unit;
-    let Some(a) = wiki::article(id) else { return w::text(ui, "Select an article.").variant("muted") };
+    let Some(a) = i18n::article(id) else { return w::text(ui, "Select an article.").variant("muted") };
     let cat = data::data()
         .wiki_categories
         .iter()
@@ -322,7 +327,7 @@ fn article(ctx: &Ctx, id: &str, mobile_article: bool, query: Signal<String>, rea
         let tags = a.tags.iter().take(8).fold(w::wrap(ui).gap(unit), |r, t| {
             let t2 = t.clone();
             r.child(
-                w::button(ui, t.clone(), move || {
+                w::button(ui, i18n::display_tag(t), move || {
                     query.set(t2.clone());
                     reading.set(false);
                 })
@@ -404,7 +409,8 @@ pub fn format_saved_at(ui: &Ui, iso: &str) -> String {
 /// Print: the print sheet the shipped app opened (title, the batch text, the note). In a
 /// browser it prints straight away; elsewhere it is saved as a page to print.
 pub fn print_sheet(ctx: &Ctx, title: &str, heading: &str, text: &str, note: &str) {
-    let html = print_html(title, heading, text, note);
+    let tr = crate::i18n::tr_lines;
+    let html = print_html(&tr(title), &tr(heading), &tr(text), &tr(note));
     #[cfg(target_arch = "wasm32")]
     {
         if crate::web::print_html(&html).is_ok() {

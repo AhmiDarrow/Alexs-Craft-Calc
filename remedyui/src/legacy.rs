@@ -156,11 +156,16 @@ pub fn import(lib: &Library, items: &LegacyItems, now_iso: &str) -> Result<Migra
                 .and_then(Value::as_str)
                 .map(|s| crate::js::slice16(s, 120))
         });
+    // 1.1.x added the language chosen.
+    let locale = items
+        .text
+        .get(PREFS_KEY)
+        .and_then(|p| serde_json::from_str::<Value>(p).ok())
+        .and_then(|p| crate::i18n::legacy_locale(&p));
     if let Some(p) = items.text.get(PREFS_KEY)
-        && serde_json::from_str::<Value>(p)
-            .ok()
-            .and_then(|v| v.as_object().cloned())
-            .is_none_or(|o| o.keys().any(|k| k != "lastWikiId"))
+        && serde_json::from_str::<Value>(p).ok().and_then(|v| v.as_object().cloned()).is_none_or(|o| {
+            o.iter().any(|(k, v)| k != "lastWikiId" && !(k == "locale" && locale.is_some() && v.is_string()))
+        })
     {
         // Preferences the app did not know (or bad JSON) are kept, not dropped.
         unreadable.push(json!({ "from": PREFS_KEY, "text": p }));
@@ -178,6 +183,9 @@ pub fn import(lib: &Library, items: &LegacyItems, now_iso: &str) -> Result<Migra
     if let Some(w) = &last_wiki {
         b.save(keys::LAST_WIKI, w)?;
     }
+    if let Some(l) = locale {
+        b.save(keys::LOCALE, &l.to_owned())?;
+    }
     b.flush()?;
 
     let soap_back = lib.soap_raw();
@@ -189,7 +197,8 @@ pub fn import(lib: &Library, items: &LegacyItems, now_iso: &str) -> Result<Migra
         && (!items.text.contains_key(MODE_KEY) || b.load::<String>(keys::MODE)?.as_deref() == Some(mode))
         && last_wiki
             .as_ref()
-            .is_none_or(|w| b.load::<String>(keys::LAST_WIKI).ok().flatten().as_ref() == Some(w));
+            .is_none_or(|w| b.load::<String>(keys::LAST_WIKI).ok().flatten().as_ref() == Some(w))
+        && locale.is_none_or(|l| b.load::<String>(keys::LOCALE).ok().flatten().as_deref() == Some(l));
     if !all_there {
         return Err("the imported recipes did not read back unchanged; the old data is untouched and the import will be tried again".into());
     }

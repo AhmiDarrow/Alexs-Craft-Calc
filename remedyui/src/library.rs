@@ -26,6 +26,8 @@ pub mod keys {
     pub const LAST_WIKI: &str = "wiki-last";
     /// The colour theme chosen.
     pub const APPEARANCE: &str = "appearance";
+    /// The language chosen (empty: the system's).
+    pub const LOCALE: &str = "locale";
     /// What the import of the web-view version's storage did.
     pub const MIGRATION: &str = "migration-webstorage";
     /// The web-view version's storage as it was read, kept until the import is verified.

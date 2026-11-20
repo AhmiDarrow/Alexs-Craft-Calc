@@ -5,10 +5,10 @@ use std::cell::Cell;
 use std::cmp::Ordering;
 use std::rc::Rc;
 
+use super::tw as w;
 use remedy_ui::forms::{self, NumberOptions};
 use remedy_ui::i18n::Decimal;
 use remedy_ui::reactive::{Signal, untrack};
-use remedy_ui::widgets as w;
 use remedy_ui::{El, Ui};
 
 /// Fraction digits a field keeps: enough for every number the shipped app wrote
@@ -50,7 +50,7 @@ pub fn decimal(
     let get = Rc::new(get);
     let initial = untrack(|| get());
     let value = Signal::new(parse_dec(&initial).unwrap_or(Decimal::ZERO));
-    let el = forms::number_input(ui, label, value, options);
+    let el = forms::number_input(ui, crate::i18n::tr(&label.into()), value, options);
     let g = get.clone();
     let el = el.bind(move || {
         let text = g();
@@ -82,8 +82,8 @@ pub fn text(
     get: impl Fn() -> String + 'static,
     set: impl Fn(String) + 'static,
 ) -> El {
-    let field =
-        if multi { w::text_area(ui, label) } else { w::text_input(ui, label) }.placeholder(placeholder);
+    let field = if multi { w::text_area(ui, label) } else { w::text_input(ui, label) }
+        .placeholder(crate::i18n::tr(placeholder));
     let get = Rc::new(get);
     field.set_value(&untrack(|| get()));
     let f2 = field.clone();
