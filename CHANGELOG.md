@@ -4,6 +4,31 @@ All notable changes to **Alex's Craft Calc** are documented here.
 
 ## [Unreleased]
 
+## [2.1.0] — 2026-11-20 — RemedyUI edition
+
+### Added (catching up with 1.1.0–1.1.1)
+- **In-app languages**: English, Español, Français, Deutsch, Português (Brasil), Italiano, Русский, Polski, 日本語, 한국어, 中文（简体）, from the same catalogs as 1.1.x
+  (`remedyui/data/locales`), chosen in the header or following the system; numbers are written
+  and read the language's way; plurals follow each language's rules; the wiki, saved lists,
+  toasts, copied, printed and shared recipe text are translated. A 1.1.x profile keeps its language.
+- **About** dialog: version, source link, and Ahmi's sign-off.
+- The floating **?** wiki button is back.
+- **Print** opens the system's print dialog on Windows and Android (Save as PDF there too), as the browser does — no more saving a page to print.
+
+### Changed
+- Soap ⇄ Candle and a change of language keep the recipe being edited.
+
+## [2.0.0] — 2026-11-19 — RemedyUI edition (`remedyui/`)
+
+### Added
+- **Recalculate** (soap) — one button, by the oils and on the results card, that balances the oils
+  against Total oils so locked results unlock: % that total 100 set the weights, otherwise the
+  weights scale to the ceiling, and with no ceiling the typed weights become Total oils
+- The whole app ported to RemedyUI 1.0 (native Windows, Android, web) — see `PORT-CHECKLIST.md`
+
+### Changed
+- Shorter, plainer hint under Total oils that points at Recalculate
+
 ## [1.1.1] — 2026-11-15
 
 ### Added
