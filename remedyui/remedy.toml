@@ -1,0 +1,23 @@
+# How `cargo remedy package` builds and labels Alex's Craft Calc.
+
+[app]
+name = "Alex's Craft Calc"
+# The same id the Tauri and Capacitor builds use, so the Android build updates the
+# Capacitor app in place (same package) and finds its saved recipes.
+id = "com.alexscraft.calc"
+publisher = "AhmiDarrow"
+description = "Soap and candle calculator with the craft wiki: cold-process lye, water, fragrance, wax and wick."
+icon = "assets/icon.png"
+
+[web]
+short_name = "Alex's Calc"
+theme_color = "#1a0a2e"
+icon = "assets/icon.png"
+
+[android]
+# Phones and tablets; build x86_64-linux-android for the emulator.
+target = "aarch64-linux-android"
+min_api = 26
+target_api = 35
+# An in-place update of an installed build needs the same signing key it was signed
+# with: set keystore and key_alias (and REMEDY_ANDROID_KEYSTORE_PASSWORD) for releases.
