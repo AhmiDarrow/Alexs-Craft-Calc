@@ -152,7 +152,7 @@ dependencies = [
 
 [[package]]
 name = "alexs-craft-calc"
-version = "2.1.0"
+version = "2.1.1"
 dependencies = [
  "flate2",
  "remedy-ui",
@@ -3231,9 +3231,11 @@ dependencies = [
  "remedy-ui-devtools",
  "remedy-ui-doc-rich",
  "remedy-ui-fonts",
+ "remedy-ui-fonts-cjk",
  "remedy-ui-host",
  "remedy-ui-input",
  "remedy-ui-layout",
+ "remedy-ui-media-effects",
  "remedy-ui-media-image",
  "remedy-ui-paint",
  "remedy-ui-reactive",
@@ -3386,6 +3388,7 @@ dependencies = [
  "remedy-ui-compositor",
  "remedy-ui-core",
  "remedy-ui-fonts",
+ "remedy-ui-fonts-cjk",
  "remedy-ui-input",
  "remedy-ui-layout",
  "remedy-ui-macros",
@@ -3420,8 +3423,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "remedy-ui-effects"
+version = "1.0.0-rc.1"
+dependencies = [
+ "remedy-ui-core",
+ "remedy-ui-paint",
+]
+
+[[package]]
 name = "remedy-ui-fonts"
 version = "1.0.0-rc.1"
+
+[[package]]
+name = "remedy-ui-fonts-cjk"
+version = "1.0.0-rc.1"
+dependencies = [
+ "remedy-ui-fonts",
+]
 
 [[package]]
 name = "remedy-ui-host"
@@ -3456,6 +3474,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "remedy-ui-media-effects"
+version = "1.0.0-rc.1"
+dependencies = [
+ "remedy-ui-core",
+ "remedy-ui-effects",
+ "remedy-ui-paint",
+ "remedy-ui-render-gpu",
+ "remedy-ui-view",
 ]
 
 [[package]]
@@ -3518,6 +3547,7 @@ version = "1.0.0-rc.1"
 dependencies = [
  "remedy-ui-compositor",
  "remedy-ui-core",
+ "remedy-ui-effects",
  "remedy-ui-host",
  "remedy-ui-paint",
  "remedy-ui-render-cpu",
@@ -3614,6 +3644,10 @@ dependencies = [
 name = "remedy-ui-view"
 version = "1.0.0-rc.1"
 dependencies = [
+ "fluent-bundle",
+ "fluent-syntax",
+ "intl-memoizer",
+ "intl_pluralrules",
  "remedy-ui-a11y",
  "remedy-ui-compositor",
  "remedy-ui-core",
@@ -3623,10 +3657,12 @@ dependencies = [
  "remedy-ui-motion",
  "remedy-ui-paint",
  "remedy-ui-reactive",
+ "remedy-ui-render-cpu",
  "remedy-ui-style",
  "remedy-ui-text",
  "remedy-ui-trace",
  "remedy-ui-tree",
+ "unic-langid",
 ]
 
 [[package]]
