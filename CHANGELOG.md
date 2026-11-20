@@ -15,7 +15,7 @@ All notable changes to **Alex's Craft Calc** are documented here.
 ### Changed
 - Shorter, plainer hint under Total oils that points at Recalculate
 
-## [Unreleased — RemedyUI edition]
+## [2.1.0] — 2026-11-20 — RemedyUI edition
 
 ### Added (catching up with 1.1.0–1.1.1)
 - **In-app languages**: English, Español, Français, Deutsch, Português (Brasil), Italiano, Русский, Polski, 日本語, 한국어, 中文（简体）, from the same catalogs as 1.1.x
