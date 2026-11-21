@@ -4,6 +4,21 @@ All notable changes to **Alex's Craft Calc** are documented here.
 
 ## [Unreleased]
 
+## [2.1.2] — 2026-11-21 — RemedyUI edition
+
+### Fixed
+- **Android: tapping a field opens the keyboard again.** On 2.1.1, tapping a number or
+  text box did nothing — no focus, no keypad — so you could not enter a recipe on a phone.
+  Built on RemedyUI with the input-method view no longer covering the screen and eating
+  taps (AhmiDarrow/RemedyUI#69).
+
+## [2.1.1] — 2026-11-20 — RemedyUI edition (bugged on Android, use 2.1.2)
+
+### Fixed
+- Scrolling on Android, number pad, keyboard-aware fields, wiki Back, and long-press Share
+  (see the 2.1.1 release notes). The keyboard still failed to open when tapping a field;
+  that is fixed in 2.1.2.
+
 ## [2.1.0] — 2026-11-20 — RemedyUI edition
 
 ### Added (catching up with 1.1.0–1.1.1)

@@ -1,6 +1,6 @@
 [package]
 name = "alexs-craft-calc"
-version = "2.1.1"
+version = "2.1.2"
 description = "Alex's Craft Calc on RemedyUI: soap and candle calculators with the craft wiki"
 authors = ["AhmiDarrow"]
 license = "MIT"
