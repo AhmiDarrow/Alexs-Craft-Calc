@@ -4,6 +4,16 @@ All notable changes to **Alex's Craft Calc** are documented here.
 
 ## [Unreleased]
 
+## [2.1.3] — 2026-11-21 — RemedyUI edition
+
+### Fixed
+- **Android: underlined keyboard text is kept when you Save, Load, or leave a field.** Words still
+  being composed (the last word with the underline, like “bar” in “Lavender bar”) were dropped on
+  2.1.2. Built on RemedyUI with the input method committing composition before a field ends or
+  restarts (AhmiDarrow/RemedyUI#80).
+- **Android: the wiki list and search come back after leaving an article.** On 2.1.2, “← All
+  articles” left an empty index (no search box, no article list). Opening the wiki fresh was fine.
+
 ## [2.1.2] — 2026-11-21 — RemedyUI edition
 
 ### Fixed
