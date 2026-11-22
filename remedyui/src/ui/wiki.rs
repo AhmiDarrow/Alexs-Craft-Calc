@@ -122,13 +122,22 @@ fn panel(ctx: &Ctx, initial: Option<String>, last: Signal<String>) -> El {
         move || w::button(&u, "← All articles", back_to_list).variant("quiet")
     })
     .el();
-    let search = w::search(ui, "Search oils, lye, wick, FO…", move |q| query.set(q));
-    let search = search.layout(|l| {
-        l.width = Length::Px(300.0);
-        l.min_width = Length::Px(200.0);
-        l.shrink = 1.0;
-    });
-    let search = show(ui, show_list.clone(), move || search.clone()).el();
+    // Build the search field inside `show`, not as a cloned El. `show` tears its child down
+    // when the article is open on a phone and builds it again on "All articles"; a reused
+    // El was already removed, so the field (and the list below) never came back.
+    let search = show(ui, show_list.clone(), {
+        let ui = ui.clone();
+        let query = query;
+        move || {
+            let q = query;
+            w::search(&ui, "Search oils, lye, wick, FO…", move |v| q.set(v)).layout(|l| {
+                l.width = Length::Px(300.0);
+                l.min_width = Length::Px(200.0);
+                l.shrink = 1.0;
+            })
+        }
+    })
+    .el();
     let cl = close.clone();
     let n5 = narrow.clone();
     let close_btn =
@@ -162,90 +171,97 @@ fn panel(ctx: &Ctx, initial: Option<String>, last: Signal<String>) -> El {
     let (sl, nc) = (show_list.clone(), narrow.clone());
     let cats = show(ui, move || sl() && !nc(), make_cats.clone()).el();
 
-    // The list.
-    let nav_box = w::column(ui).gap(unit / 2.0).fill_width();
-    let items = mirror(&nav_box, move || {
-        let q = query.get();
-        let cat = category.get();
-        let found: Vec<&data::WikiArticle> =
-            wiki::search(all, &q).into_iter().filter(|a| cat == "all" || a.category == cat).collect();
-        let mut out = Vec::new();
-        if !crate::js::trim(&q).is_empty() {
-            out.push(NavItem::Group(format!("⌕ {} ({})", i18n::t("wiki.searchResults"), found.len())));
-            out.extend(found.iter().map(|a| NavItem::Article(a.id.clone())));
-        } else {
-            for c in &data::data().wiki_categories {
-                let group: Vec<_> = found.iter().filter(|a| a.category == c.id).collect();
-                if !group.is_empty() {
-                    out.push(NavItem::Group(format!("{} {} ({})", c.icon, i18n::tr(&c.label), group.len())));
-                    out.extend(group.iter().map(|a| NavItem::Article(a.id.clone())));
-                }
-            }
-        }
-        out
-    });
-    let oa = open_article.clone();
-    let u = ui.clone();
-    let nav = w::for_each(
-        &nav_box,
-        items,
-        |i: &NavItem| match i {
-            NavItem::Group(g) => format!("g:{g}"),
-            NavItem::Article(a) => format!("a:{a}"),
-        },
-        move |i| match i {
-            NavItem::Group(g) => w::heading(&u, 3, g.clone()),
-            NavItem::Article(id) => {
-                let a = i18n::article(id).cloned().unwrap_or_else(|| data::WikiArticle {
-                    id: id.clone(),
-                    title: id.clone(),
-                    category: String::new(),
-                    tags: Vec::new(),
-                    summary: String::new(),
-                    sections: Vec::new(),
-                });
-                let oa = oa.clone();
-                let id2 = id.clone();
-                let b = w::button(&u, a.title.clone(), move || oa(id2.clone()))
-                    .variant("quiet")
-                    .fill_width()
-                    .justify(remedy_ui::layout::Justify::Start)
-                    .semantics(
-                        Semantics::new(Role::Button)
-                            .label(format!("{} — {}", a.title, a.summary))
-                            .action(remedy_ui::a11y::Action::Click),
-                    );
-                let id3 = id.clone();
-                let b2 = b.clone();
-                let col = w::column(&u)
-                    .fill_width()
-                    .child(b)
-                    .child(w::text(&u, a.summary.clone()).variant("muted"));
-                col.bind(move || b2.state(remedy_ui::style::States::SELECTED, active.get() == id3))
-            }
-        },
-    );
-    let empty = show(
-        ui,
-        move || {
-            let q = query.get();
-            let cat = category.get();
-            !wiki::search(all, &q).into_iter().any(|a| cat == "all" || a.category == cat)
-        },
-        {
-            let u = ui.clone();
-            move || w::text(&u, "No articles match. Try “coconut”, “trace”, or “wick”.").variant("muted")
-        },
-    )
-    .el();
+    // The list (and the empty-state line) are also built inside `show`, for the same reason
+    // as the search field: on a phone the list is taken down while an article is open.
     let n6 = narrow.clone();
     let nav = show(ui, show_list.clone(), {
         let u = ui.clone();
+        let query = query;
+        let category = category;
+        let oa = open_article.clone();
+        let active = active;
+        let make_cats = make_cats.clone();
+        let n6 = n6.clone();
         move || {
+            let nav_box = w::column(&u).gap(unit / 2.0).fill_width();
+            let items = mirror(&nav_box, move || {
+                let q = query.get();
+                let cat = category.get();
+                let found: Vec<&data::WikiArticle> =
+                    wiki::search(all, &q).into_iter().filter(|a| cat == "all" || a.category == cat).collect();
+                let mut out = Vec::new();
+                if !crate::js::trim(&q).is_empty() {
+                    out.push(NavItem::Group(format!("⌕ {} ({})", i18n::t("wiki.searchResults"), found.len())));
+                    out.extend(found.iter().map(|a| NavItem::Article(a.id.clone())));
+                } else {
+                    for c in &data::data().wiki_categories {
+                        let group: Vec<_> = found.iter().filter(|a| a.category == c.id).collect();
+                        if !group.is_empty() {
+                            out.push(NavItem::Group(format!("{} {} ({})", c.icon, i18n::tr(&c.label), group.len())));
+                            out.extend(group.iter().map(|a| NavItem::Article(a.id.clone())));
+                        }
+                    }
+                }
+                out
+            });
+            let oa = oa.clone();
+            let u2 = u.clone();
+            let nav = w::for_each(
+                &nav_box,
+                items,
+                |i: &NavItem| match i {
+                    NavItem::Group(g) => format!("g:{g}"),
+                    NavItem::Article(a) => format!("a:{a}"),
+                },
+                move |i| match i {
+                    NavItem::Group(g) => w::heading(&u2, 3, g.clone()),
+                    NavItem::Article(id) => {
+                        let a = i18n::article(id).cloned().unwrap_or_else(|| data::WikiArticle {
+                            id: id.clone(),
+                            title: id.clone(),
+                            category: String::new(),
+                            tags: Vec::new(),
+                            summary: String::new(),
+                            sections: Vec::new(),
+                        });
+                        let oa = oa.clone();
+                        let id2 = id.clone();
+                        let b = w::button(&u2, a.title.clone(), move || oa(id2.clone()))
+                            .variant("quiet")
+                            .fill_width()
+                            .justify(remedy_ui::layout::Justify::Start)
+                            .semantics(
+                                Semantics::new(Role::Button)
+                                    .label(format!("{} — {}", a.title, a.summary))
+                                    .action(remedy_ui::a11y::Action::Click),
+                            );
+                        let id3 = id.clone();
+                        let b2 = b.clone();
+                        let col = w::column(&u2)
+                            .fill_width()
+                            .child(b)
+                            .child(w::text(&u2, a.summary.clone()).variant("muted"));
+                        col.bind(move || b2.state(remedy_ui::style::States::SELECTED, active.get() == id3))
+                    }
+                },
+            );
+            let empty = show(
+                &u,
+                move || {
+                    let q = query.get();
+                    let cat = category.get();
+                    !wiki::search(all, &q).into_iter().any(|a| cat == "all" || a.category == cat)
+                },
+                {
+                    let u = u.clone();
+                    move || w::text(&u, "No articles match. Try “coconut”, “trace”, or “wick”.").variant("muted")
+                },
+            )
+            .el();
             let n6 = n6.clone();
             let phone_cats = show(&u, n6.clone(), make_cats.clone()).el();
             let list = w::scroll(&u)
-                .child(w::column(&u).gap(unit).child(phone_cats).child(nav.clone()).child(empty.clone()));
+                .child(w::column(&u).gap(unit).child(phone_cats).child(nav).child(empty));
             let l2 = list.clone();
             list.bind(move || {
                 let wide = !n6();
