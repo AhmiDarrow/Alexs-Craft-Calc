@@ -5,194 +5,112 @@
 </p>
 
 <p align="center">
-  <strong>Soap + candle math in one beautiful offline app.</strong><br/>
-  Cold-process lye · wax & fragrance · full craft wiki · Windows · Android · PWA
+  <strong>Soap and candle math in one offline app.</strong><br/>
+  Cold-process lye · wax and fragrance · craft wiki · Windows · Android · Web
 </p>
 
 <p align="center">
-  <a href="https://github.com/AhmiDarrow/Alexs-Craft-Calc/releases/tag/v1.1.1"><img alt="version" src="https://img.shields.io/badge/version-1.1.1-a855f7?style=for-the-badge" /></a>
+  <a href="https://github.com/AhmiDarrow/Alexs-Craft-Calc/releases/latest"><img alt="version" src="https://img.shields.io/github/v/release/AhmiDarrow/Alexs-Craft-Calc?style=for-the-badge&color=a855f7&label=version" /></a>
   <a href="#safety"><img alt="offline" src="https://img.shields.io/badge/runs-offline-0f172a?style=for-the-badge" /></a>
-  <a href="#native-builds"><img alt="platforms" src="https://img.shields.io/badge/Windows%20·%20Android%20·%20PWA-1e1b4b?style=for-the-badge" /></a>
-  <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/local%20first-no%20account-312e81?style=for-the-badge" /></a>
+  <a href="#download"><img alt="platforms" src="https://img.shields.io/badge/Windows%20·%20Android%20·%20Web-1e1b4b?style=for-the-badge" /></a>
+  <a href="#privacy"><img alt="local first" src="https://img.shields.io/badge/local%20first-no%20account-312e81?style=for-the-badge" /></a>
 </p>
 
 ---
 
-Toggle **Soap ⇄ Candle** in one installable app. Press **F1** anytime for the **Craft Wiki** — app help plus a real encyclopedia of oils, waxes, process, and safety.
+Switch between **Soap** and **Candle** in one app. Press **F1** any time for the **Craft Wiki**, which has help for the app plus a full encyclopedia of oils, waxes, process and safety.
 
-> Built for makers who weigh twice and pour once. All math stays on your machine.
+> Built for makers who weigh twice and pour once. All the math stays on your device.
+
+Since 2.0 the app is built with [RemedyUI](https://github.com/AhmiDarrow/RemedyUI), a native Rust UI, so it's one fast build for Windows, Android and the web.
+
+## Download
+
+Grab the [latest release](https://github.com/AhmiDarrow/Alexs-Craft-Calc/releases/latest).
+
+| Platform | File |
+|:--|:--|
+| **Android** (arm64) | `alexs-craft-calc_<version>_arm64-v8a.apk`. Installs over earlier 2.x versions and keeps your recipes. |
+| **Windows** | `alexs-craft-calc_<version>_x64-setup.exe`, or the portable zip. They're unsigned, so SmartScreen may ask first. |
+| **Web** | `alexs-craft-calc_<version>_web.zip`. Serve it over HTTPS or localhost, and it installs as an offline app. |
+
+**Updates:** when a new version is out, the app shows a single "Update available" notice. On Android, tap **Update**, watch the progress bar, then tap **Install**. Your recipes are kept, and it never nags or updates on its own.
+
+Coming from 1.x on Android? See the [2.1.0 notes](https://github.com/AhmiDarrow/Alexs-Craft-Calc/releases/tag/remedyui-v2.1.0) to bring your recipes over.
 
 ## ✧ Highlights
 
 | | |
 |:--|:--|
-| **Soap** | 51 oils/butters · dual weight/% entry · NaOH/KOH · superfat · water 3 ways · FA quality profile · 23 additives (incl. citric lye compensation) |
-| **Candle** | 10 wax profiles · vessel presets · FO load guidance · dye estimate · wick starting points |
-| **Wiki** | 100 articles (static + full oil/wax encyclopedia) · search · deep-links from calculators · phone Back stack |
-| **Recipes** | Save / load / share portable JSON · library backup · copy · print batch sheets |
-| **Ship** | Tauri Windows EXE/MSI · Capacitor Android APK · installable offline PWA |
+| **Soap** | 51 oils and butters · weight or % entry · NaOH or KOH · superfat · water 3 ways · fatty-acid profile · 23 additives (citric acid compensates the lye) |
+| **Candle** | 10 wax profiles · 12 vessel presets · fragrance-load guidance · dye estimate · wick starting points |
+| **Wiki** | About 100 articles: 39 craft and help pages plus every oil and wax · search · links from the calculators · phone Back steps through it |
+| **Recipes** | Save, load and share portable JSON · full library backup and import · copy · print batch sheets |
+| **Everywhere** | 12 languages, following your system language with a picker to change it · dark Alien Purple and light Alien Daylight themes, or follow the system |
 
 ## Soap calculator
 
-- **51 oils & butters** with industry-standard NaOH SAP values + craft encyclopedia blurbs
-- **Weight of oils:** unit tabs **g · oz · lb** (default **oz**) + dedicated **Total oils ceiling**
-- **Dual entry:** weight **and** % always editable per oil — edit one oil only; others stay put
-- Total oils is the recipe ceiling (never auto-rewritten when you type oil weights)
-- Results unlock when oil % = 100% **and** weights sum to Total oils
+- **51 oils and butters** with standard NaOH SAP values and encyclopedia notes
+- Units **g · oz · lb** (oz by default) with a **Total oils** ceiling
+- Weight **and** % are editable per oil, and editing one oil leaves the others alone
+- Results unlock once oil % adds up to 100% and the weights match Total oils
 - Helpers: Scale weights to total · Apply % to weights
-- NaOH (bar) or KOH (liquid) — KOH from NaOH via molecular-weight ratio
-- Superfat % with live lye adjustment
-- Water methods: % of oils · lye concentration · water discount
-- Fragrance % of oils
-- **Fatty-acid quality profile** — live breakdown with good-range status
-- **Additives & add-ins** — clays, oats, milks, salts, botanicals, chelators, colorants, antioxidants (usage % + phase + cautions; citric acid auto-compensates lye)
-- Weighted iodine & INS + hardness body hint
-- Presets: **Custom** · Castile-ish · Everyday Bar · Creamy Shea · Palm-free · Luxury Butter
-- Custom recipe notes · Save / load / delete · Load portable JSON · Share · Copy · Print
-- Per-oil wiki deep-links (ⓘ)
+- NaOH for bars or KOH for liquid soap
+- Superfat %, three water methods (% of oils, lye concentration, water discount), fragrance %
+- Live fatty-acid quality profile, iodine and INS
+- Additives with usage %, phase and cautions
+- Presets: Custom · Castile-ish · Everyday Bar · Creamy Shea · Palm-free · Luxury Butter
 
 ## Candle calculator
 
-- **10 wax profiles** (soy, para-soy, coconut blends, beeswax, paraffin, palm, gel)
-- Vessel presets (tins, jars, pillars, tealight…) with diameter hints
-- Per-vessel or total wax entry
-- Fragrance load % with min/max guidance + in-range pill
-- Dye block estimate · wick starting-point by jar diameter
-- Pour / melt temperature notes
-- Units: g · oz · lb (converts wax weights)
-- Save / load · Copy · Print · Load / Share (same portable format as soap)
+- **10 wax profiles**: soy, para-soy, coconut blends, beeswax, paraffin, palm and gel
+- **12 vessel presets** with diameter hints, per-vessel or total wax entry
+- Fragrance load with min, typical and max guidance
+- Dye estimate, wick starting points by jar diameter, and pour and melt temperatures
+- Units g · oz · lb
 
-## Craft Wiki (F1)
-
-- **~100 articles**: app manual + soap craft + candle craft + safety + reference + every oil & wax
-- Categories, search, tags
-- Keyboard: **F1** toggle · **Esc** close · **Ctrl+/** focus search
-- Deep-link from calculators into the matching oil/wax page
-- **Phone:** one full page at a time — **← All articles**, Esc, or system **Back** returns article → list → calculator (does not exit the app first)
-
-## Recipe save / load / share
+## Recipes: save, load, share
 
 | Action | What it does |
 |--------|----------------|
-| **Save** | Store or update the active recipe in the local library |
-| **Load** | Friend’s `.alex-soap.json` / `.alex-candle.json` or full library backup → merges into Saved |
-| **Share** | OS share sheet on phone when available; otherwise downloads the portable file (right-click / long-press Share for full library) |
+| **Save** | Stores or updates the recipe in your library on this device |
+| **Load** | Opens a friend's `.alex-soap.json` / `.alex-candle.json` or a full library backup and merges it into Saved |
+| **Share** | Opens the share sheet with the recipe file. Long-press (or right-click) to share your whole library. |
+| **Copy / Print** | Copies the batch as text or prints a batch sheet |
 
-Format: `alex-craft-calc-recipe` v1 (round-trips cleanly; older export files still Load).  
-Name collision without an active slot → confirm before overwrite.
+The file format is `alex-craft-calc-recipe` v1, and exports from older versions still load.
 
-## App shell
+## Privacy
 
-- Dark craft UI with brand art
-- Soap ⇄ Candle mode toggle (remembered)
-- Installable PWA (Windows desktop + phone home screen)
-- Works **offline** after first load
-- Toasts, floating help, mobile-safe layout
-- **No account, no cloud** — all math runs locally
+No account and no cloud. Recipes stay on your device, and the only network call is the one-time check for a newer release on GitHub.
 
-## Quick start
+## Build from source
 
-### Windows (everyday)
-
-1. Double-click **`START.bat`** in this folder  
-   *(first run builds if needed, then opens a local server)*
-2. Browser opens **http://localhost:4173**
-3. Optional: Chrome/Edge → **Install Alex's Craft Calc** for a desktop app window
-4. Press **F1** for the craft wiki
-
-### Dev
+The app lives in [`remedyui/`](./remedyui) and is built with the RemedyUI toolchain (`cargo remedy`).
 
 ```bash
-npm install
-npm run dev
+cd remedyui
+cargo test                                  # calculator and data tests
+cargo remedy package --target windows       # setup exe + portable zip (on Windows)
+cargo remedy package --target android       # APK (needs the Android SDK/NDK)
+cargo remedy package --target web           # offline web build
 ```
 
-### Production web
+Settings such as the app id, icon and Android permissions are in [`remedyui/remedy.toml`](./remedyui/remedy.toml). The Android app keeps the id `com.alexscraft.calc`, so it updates earlier installs in place, but only when signed with the same key.
 
-```bash
-npm run build
-npm start
-```
-
-### Tests
-
-```bash
-npm test
-```
-
-## Mobile (PWA)
-
-1. On the same Wi‑Fi, open `http://<your-pc-ip>:4173` from the phone  
-   or deploy the `dist/` folder to any static host / tunnel.
-2. Safari/Chrome → **Add to Home Screen**
-3. Tap **?** or **F1 / Wiki** for the knowledge base.
-
-## Releases (CI)
-
-Installers are built **on GitHub**, not on your laptop.
-
-```bash
-# bump version in package.json + src-tauri + android/app/build.gradle, then:
-git tag v1.1.1
-git push origin v1.1.1
-```
-
-| Workflow | When | Output |
-|----------|------|--------|
-| [CI](.github/workflows/ci.yml) | PR / push to `main` | `npm test` + typecheck |
-| [Release](.github/workflows/release.yml) | tag `v*` (or manual dispatch) | Windows MSI/NSIS + Android debug APK on the [GitHub Release](https://github.com/AhmiDarrow/Alexs-Craft-Calc/releases) |
-
-Re-run a tag build anytime: **Actions → Release → Run workflow** (pass the tag, e.g. `v1.1.1`).
-
-### Local native builds (optional)
-
-Only if you need to debug packaging offline.
-
-**Windows (Tauri)** — Rust + MSVC Build Tools + WebView2:
-
-```bash
-npm install
-npm run tauri:build
-```
-
-**Android (Capacitor)** — JDK 21 + Android SDK:
-
-```bash
-npm run android:apk
-```
-
-See [`releases/README.md`](./releases/README.md) for paths and notes.
-
-## Project layout
-
-```
-src/           React UI + calc engines + F1 wiki
-src-tauri/     Tauri 2 Windows desktop shell
-android/       Capacitor Android project
-public/        Icons, brand mark, PWA assets
-releases/      Local packaged EXE / MSI / APK notes
-START.bat      One-click web launcher
-```
+The older 1.x React/Tauri/Capacitor app is still in the repo root (`src/`, `src-tauri/`, `android/`) for reference.
 
 ## Safety
 
-- Always add **lye to water**, never water to lye. Wear PPE.
-- Verify SAP values with your oil supplier COA.
-- Fragrance limits vary by IFRA and wax brand — test burn candles.
+- Always add **lye to water**, never water to lye, and wear PPE.
+- Check SAP values against your supplier's COA.
+- Fragrance limits depend on IFRA and the wax brand, so test-burn your candles.
 - This tool is for craft planning, not lab certification.
 
 ## Changelog
 
-See **[CHANGELOG.md](./CHANGELOG.md)** — current release **v1.1.1**.
-
-## Downloads
-
-GitHub Releases: [v1.1.1](https://github.com/AhmiDarrow/Alexs-Craft-Calc/releases/tag/v1.1.1)
+See **[CHANGELOG.md](./CHANGELOG.md)**.
 
 ---
-
-<p align="center">
-  <sub>Built for Ahmi · Alex's Craft Calc <strong>v1.1.1</strong> · local-first craft math</sub>
-</p>
 
 "Hope this helps" - Ahmi
