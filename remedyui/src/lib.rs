@@ -18,6 +18,7 @@ pub mod soap;
 pub mod soap_form;
 pub mod storage;
 pub mod ui;
+pub mod update;
 pub mod wiki;
 
 use remedy_ui::{App, AppConfig};

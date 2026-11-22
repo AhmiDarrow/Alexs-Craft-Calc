@@ -32,6 +32,8 @@ pub mod keys {
     pub const MIGRATION: &str = "migration-webstorage";
     /// The web-view version's storage as it was read, kept until the import is verified.
     pub const BACKUP: &str = "migration-webstorage-backup";
+    /// Last Android update version the person already acted on (Later, or the installer started).
+    pub const UPDATE_NOTICE: &str = "update-notice";
 }
 
 /// The version of every value this app writes.
