@@ -6,6 +6,13 @@ All notable changes to **Alex's Craft Calc** are documented here.
 
 ## [2.1.3] — 2026-11-21 — RemedyUI edition
 
+### Added
+- **Android: a one-time notice when a newer official APK is out**, from the GitHub releases
+  (tags `remedyui-v*`). Later quiets it for that version; Update downloads the APK (with a
+  progress bar in the app) and opens the system installer so you just tap Install. Your
+  recipes stay on the device. If you are offline, or you already chose Later or started
+  the installer for that version, nothing is shown. Never forced, never repeated.
+
 ### Fixed
 - **Android: underlined keyboard text is kept when you Save, Load, or leave a field.** Words still
   being composed (the last word with the underline, like “bar” in “Lavender bar”) were dropped on

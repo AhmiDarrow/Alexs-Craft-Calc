@@ -343,6 +343,7 @@ pub fn open_at(app: &App, source: LegacySource, start: Start) {
         if let Some(msg) = &imported {
             toast(ui, msg);
         }
+        crate::update::attach(&ctx);
     });
 }
 
