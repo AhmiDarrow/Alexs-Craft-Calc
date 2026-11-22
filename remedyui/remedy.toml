@@ -21,3 +21,7 @@ min_api = 26
 target_api = 35
 # An in-place update of an installed build needs the same signing key it was signed
 # with: set keystore and key_alias (and REMEDY_ANDROID_KEYSTORE_PASSWORD) for releases.
+# internet: the one-time "a newer version is out" check. REQUEST_INSTALL_PACKAGES: after
+# the person taps Update, the system installer can install the APK we downloaded (they
+# still tap Install; recipes stay on the device).
+permissions = ["internet", "android.permission.REQUEST_INSTALL_PACKAGES"]
