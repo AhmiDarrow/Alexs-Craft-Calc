@@ -14,6 +14,11 @@
   <a href="#safety"><img alt="offline" src="https://img.shields.io/badge/runs-offline-0f172a?style=for-the-badge" /></a>
   <a href="#download"><img alt="platforms" src="https://img.shields.io/badge/Windows%20·%20Android%20·%20Web-1e1b4b?style=for-the-badge" /></a>
   <a href="#privacy"><img alt="local first" src="https://img.shields.io/badge/local%20first-no%20account-312e81?style=for-the-badge" /></a>
+  <a href="#built-with-remedyui"><img alt="built with RemedyUI" src="https://img.shields.io/badge/built%20with-RemedyUI-8A2BE2?style=for-the-badge" /></a>
+</p>
+
+<p align="center">
+  <strong>The first app built with <a href="#built-with-remedyui">RemedyUI</a></strong>: one Rust app for Windows, Android and the web.
 </p>
 
 ---
@@ -22,7 +27,13 @@ Switch between **Soap** and **Candle** in one app. Press **F1** any time for the
 
 > Built for makers who weigh twice and pour once. All the math stays on your device.
 
-Since 2.0 the app is built with [RemedyUI](https://github.com/AhmiDarrow/RemedyUI), a native Rust UI, so it's one fast build for Windows, Android and the web.
+## Built with RemedyUI
+
+Alex's Craft Calc is the first app built with [RemedyUI](https://github.com/AhmiDarrow/RemedyUI), Ahmi Darrow's own Rust UI engine. Since 2.0, every screen is drawn by RemedyUI and every package is built by its toolchain:
+
+- **One native Rust app** for Windows, Android and the web, drawn by the same engine on all three.
+- **No web view and no JavaScript framework.** The 1.x releases were a React app wrapped in Tauri and Capacitor; 2.0 replaced all of it.
+- **One toolchain** (`cargo remedy`) builds the Windows installer, the Android APK and the offline web app.
 
 ## Download
 
