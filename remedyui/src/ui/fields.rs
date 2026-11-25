@@ -50,7 +50,16 @@ pub fn decimal(
     let get = Rc::new(get);
     let initial = untrack(|| get());
     let value = Signal::new(parse_dec(&initial).unwrap_or(Decimal::ZERO));
-    let el = forms::number_input(ui, crate::i18n::tr(&label.into()), value, options);
+    // The limits are for typing. The form's own numbers can pass them (a weight over the total
+    // oils makes its % pass 100), and the engine moves a value inside its limits, which would
+    // rewrite what was typed; so the limits stretch to hold the number shown.
+    let (min, max) = (options.min, options.max);
+    let el = forms::number_input_within(ui, crate::i18n::tr(&label.into()), value, options, move || {
+        let v = value.get_untracked().ok();
+        let low = min.map(|m| v.filter(|v| *v < m).unwrap_or(m));
+        let high = max.map(|m| v.filter(|v| *v > m).unwrap_or(m));
+        (low, high)
+    });
     let g = get.clone();
     let el = el.bind(move || {
         let text = g();
