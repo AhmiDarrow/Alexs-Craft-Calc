@@ -4,6 +4,11 @@ All notable changes to **Alex's Craft Calc** are documented here.
 
 ## [Unreleased]
 
+## [2.1.4] — 2026-11-25 — RemedyUI edition
+
+### Changed
+- Built on the current RemedyUI engine. Screen readers now announce the language picker as a combo box. Your recipes are unchanged.
+
 ## [2.1.3] — 2026-11-21 — RemedyUI edition
 
 ### Added

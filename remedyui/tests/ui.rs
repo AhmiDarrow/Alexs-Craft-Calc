@@ -284,9 +284,9 @@ fn the_language_changes_in_place_and_keeps_the_recipe() {
             .any(|n| n.name.as_deref() == Some("Weight") && n.value.as_deref() == Some("500"))
     );
     // Language → Deutsch.
-    assert!(app.press(Role::Button, "Language"));
+    assert!(app.press(Role::ComboBox, "Language"));
     app.frames(2);
-    assert!(app.press(Role::MenuItem, "Deutsch"));
+    assert!(app.press(Role::Option, "Deutsch"));
     app.frames(3);
     assert!(
         app.find(Role::Heading(2), "Seifenrechner").is_some() || has_label(&app, "Rezeptname"),
